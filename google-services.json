@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "584306140716",
+    "project_id": "flaya-9ebb2",
+    "storage_bucket": "flaya-9ebb2.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:584306140716:android:933263024fa3076c121389",
+        "android_client_info": {
+          "package_name": "com.flayasapp.flayaco"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "584306140716-58589sosjfhtgdppcmud5vshspiqis59.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.flayasapp.flayaco",
+            "certificate_hash": "6ddafbf96d64fa951f05381264d09baae89edfe4"
+          }
+        },
+        {
+          "client_id": "584306140716-cqj55jkteggfijs93jdrh1p36l3g2kkm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGH0TZTw-U6JmCSrYCEfWflcZlIWyBdSI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "584306140716-cqj55jkteggfijs93jdrh1p36l3g2kkm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

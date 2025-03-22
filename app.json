@@ -1,25 +1,38 @@
 {
   "expo": {
     "name": "Flaya",
-    "slug": "Flaya",
-    "version": "1.0.0",
+    "slug": "flayaco",
+    "version": "1",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "icon": "./assets/images/flareapp.png",
+    "scheme": "flaya",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/flaya_main.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.flayasapp.flayaco",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
+      "notification": {
+        "icon": "./assets/images/flareapp.png",
+        "color": "#FFFFFF"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCxuU-tNQrj6WbpsHRooQN0vDEyOr1nb8E"
+        }
+      },
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/flareapp.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.flayasapp.flayaco",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -27,10 +40,20 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "@react-native-google-signin/google-signin"
+      
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "3fbda417-b2c3-45b4-b5b7-bba63ccad7fa"
+      }
     }
   }
 }
