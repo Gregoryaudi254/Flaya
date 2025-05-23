@@ -1,24 +1,22 @@
-import { StyleSheet, Text, View, Image, ImageBackground, Dimensions, TouchableOpacity ,ActivityIndicator,TouchableWithoutFeedback, FlatList} from 'react-native';
+import { StyleSheet, Text, View, Image, ImageBackground, Dimensions, TouchableOpacity, ActivityIndicator, TouchableWithoutFeedback, FlatList, TextInput } from 'react-native';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ResizeMode, Video } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {useLocalSearchParams,useRouter} from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import CommentsPost from '@/components/commentsPost';
 import CustomDialogRepost from '@/components/CustomDialogRepost';
 import { getData, storeData } from '@/constants/localstorage';
 import { db } from '@/constants/firebase';
 
-import { setDoc , serverTimestamp, doc, getDoc, deleteDoc, writeBatch} from 'firebase/firestore';
+import { setDoc, serverTimestamp, doc, getDoc, deleteDoc, writeBatch, updateDoc } from 'firebase/firestore';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Comments from '@/components/comments';
 
 import { getDistance } from 'geolib';
-import { Menu, MenuOptions, MenuOption, MenuTrigger ,renderers} from 'react-native-popup-menu';
+import { Menu, MenuOptions, MenuOption, MenuTrigger, renderers } from 'react-native-popup-menu';
 const { ContextMenu, SlideInMenu, Popover } = renderers;
 import Dialog from '@/components/CustomDialog';
-
-const reports = ['Nudity or sexual activity','Scam or Fraud','Violence or self injury','False information']
 
 import { Colors } from '@/constants/Colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -28,7 +26,7 @@ import ImageView from "react-native-image-viewing";
 import { defaultProfileImage, goToGoogleMap, handleSharePostPress } from '@/constants/common';
 import { useDispatch, useSelector } from 'react-redux';
 import { setData } from '@/slices/dataChangeSlice';
-const { width: screenWidth,height } = Dimensions.get('window');
+const { width: screenWidth, height } = Dimensions.get('window');
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 import PullToRefresh from 'react-native-pull-to-refresh';
@@ -38,11 +36,100 @@ import ReportBottomSheet from '@/components/ReportBottomSheet';
 import DownLoadMediaItem from '@/components/DownloadMediaItem';
 import CustomDialog from '@/components/CustomDialog';
 import CircularProgress from "react-native-circular-progress-indicator";
+import { timeAgoPost } from '@/constants/timeAgoPost';
+import InteractingUsers from '@/components/Likers';
+
+import { useToast } from 'react-native-toast-notifications';
+import Ionicons from '@expo/vector-icons/Ionicons';
+
+const reports = ['Nudity or sexual activity','Scam or Fraud','Violence or self injury','False information', 'Child abuse'];
+
+// Add this memoized component definition before the postpage component
+const CaptionEditBottomSheet = React.memo(({ 
+  bottomSheetRef, 
+  colorScheme, 
+  newDescription, 
+  setNewDescription, 
+  loading, 
+  handleSaveCaption,
+  onSheetChange
+}) => {
+  return (
+    <BottomSheet
+      ref={bottomSheetRef}
+      index={-1}
+      snapPoints={['50%']}
+      enablePanDownToClose
+      backgroundStyle={{ backgroundColor: colorScheme === 'dark' ? '#1E1E1E' : '#FFFFFF' }}
+      handleIndicatorStyle={{ backgroundColor: colorScheme === 'dark' ? '#666666' : '#CCCCCC' }}
+      onChange={onSheetChange}
+    >
+      <View style={{
+        flex: 1,
+        padding: 16
+      }}>
+        <Text style={{
+          fontSize: 18,
+          fontWeight: '600',
+          marginBottom: 16,
+          color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main
+        }}>
+          Edit Caption
+        </Text>
+        
+        <TextInput
+          style={{
+            height: 120,
+            borderWidth: 1,
+            borderColor: colorScheme === 'dark' ? '#444444' : '#DDDDDD',
+            borderRadius: 10,
+            padding: 15,
+            marginBottom: 20,
+            textAlignVertical: 'top',
+            color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,
+            backgroundColor: colorScheme === 'dark' ? '#333333' : '#F5F5F5',
+          }}
+          placeholder="Enter a caption for your post..."
+          placeholderTextColor={colorScheme === 'dark' ? '#777777' : '#999999'}
+          multiline
+          value={newDescription}
+          onChangeText={setNewDescription}
+        />
+        
+        <TouchableOpacity
+          style={{
+            height: 50,
+            borderRadius: 25,
+            backgroundColor: loading ? '#888888' : Colors.blue,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginTop: 10,
+          }}
+          onPress={handleSaveCaption}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 16,
+              fontWeight: '600',
+            }}>
+              Save Changes
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </BottomSheet>
+  );
+});
 
 const postpage = () => {
 
   const colorScheme = useColorScheme()
 
+  const toast = useToast();
   
 
 
@@ -69,6 +156,8 @@ const postpage = () => {
     const [selectedImage, setselectedImage] = useState(null);
     const [imageViewerVisible, setimageViewerVisible] = useState(false);
     const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
+    const [descriptionEdit, setDescriptionEdit] = useState(false);
+    const [newDescription, setNewDescription] = useState("");
 
     const [isloading,setLoading] = useState(false)
 
@@ -95,6 +184,7 @@ const postpage = () => {
 
 
     const bottomSheetRef = useRef(null);
+    const captionEditSheetRef = useRef(null);
     const initialSnapIndex = -1;
 
     const onReportPress = useCallback((postinfo) => {
@@ -433,7 +523,7 @@ const postpage = () => {
 
 
       const handleGoogleMaps = useCallback(() => {
-        goToGoogleMap(post.coordinates._latitude,post.coordinates._longitude)
+        goToGoogleMap(post.coordinates._latitude || post.coordinates.latitude, post.coordinates._longitude ||  post.coordinates.longitude)
       });
 
       const [isrefreshing,setrefreshing] = useState(false)
@@ -526,13 +616,85 @@ const postpage = () => {
         handleSharePostPress(item,post.contentType, post.user,post.id,setDownloadProgress, setDialogDownLoad);
       },[post]);
 
-      const handleDialogClose = useCallback(() =>{
+      const handleDialogClose = useCallback(()=>{
          setsharingUrls([])
          setDialogDownLoad(false);
       });
 
 
+      const [isLikersModalVisible, setLikersModalVisible] = useState(false);
+      const handleLikesPress = useCallback(() => {
+        setLikersModalVisible(true);
+      });
+
+      const handleLikersModalClose = () =>{
+        setLikersModalVisible(false)
+      }
+
+      const showToast = (message) => {
+
+        toast.show(message, {
+          type: "normal",
+          placement: 'bottom',
+          duration: 2000,
+          offset: 30,
+          animationType: "zoom-in",
+        });
+    
+      };
+
+
+      const onCaptionEdit = useCallback(() => {
+        setNewDescription(post.description || "");
+        if (captionEditSheetRef.current) {
+          captionEditSheetRef.current.snapToIndex(0);
+        }
+      }, [post.description]);
+
+      const [captionLoading, setCaptionLoading] = useState(false);
+
+      const handleSaveCaption = useCallback(async () => {
+        try {
+
+
+          if (newDescription !== null && newDescription !== undefined) {
+            if (newDescription.length > 170) {
+              showToast("Too many words")
+              return
+            }
+          }
+          setCaptionLoading(true);
           
+          // Update the post in Firestore
+          const postRef = doc(db, `users/${post.user}/posts/${post.id}`);
+          await updateDoc(postRef, {
+            description: newDescription
+          });
+          
+          // Update local state
+          setPost(prev => ({
+            ...prev,
+            description: newDescription
+          }));
+          
+          // Close the bottom sheet
+          if (captionEditSheetRef.current) {
+            captionEditSheetRef.current.close();
+          }
+          
+          // Dispatch update to Redux if needed
+          dispatch(setData({info: {description:newDescription, id:post.id}, intent: 'postupdate'}));
+          
+          showToast("Caption updated successfully");
+        } catch (error) {
+          console.error("Error updating caption:", error);
+          showToast("Error updating caption");
+        } finally {
+          setCaptionLoading(false);
+        }
+      }, [newDescription, post]);
+      
+     
     return (
 
       <GestureHandlerRootView>
@@ -595,7 +757,7 @@ const postpage = () => {
 
                         </View>
 
-                        {timestamp !== null && <Text style={{fontSize:15, color:'gray',marginTop:3}}>{timeAgo(timestamp)}</Text>}
+                        {timestamp !== null && <Text style={{fontSize:15, color:'gray',marginTop:1}}>{timeAgoPost(timestamp)}</Text>}
 
                       </View>
 
@@ -608,7 +770,7 @@ const postpage = () => {
                     </TouchableOpacity> : <View></View>
                     }
 
-                    {(timestamp !== null && iscurrentuserpost) && <Text style={{fontSize:15, color:'gray'}}>{timeAgo(timestamp)}</Text>}
+                    {(timestamp !== null && iscurrentuserpost) && <Text style={{fontSize:15, color:'gray'}}>{timeAgoPost(timestamp)}</Text>}
 
                 </View>
 
@@ -631,71 +793,77 @@ const postpage = () => {
                   </TouchableOpacity>}
 
                   
-                  <Menu style={{right:10,marginLeft:10}} renderer={Popover} >
-                  <MenuTrigger >
-                  <Image
+                  <Menu style={{right:10, marginLeft:10}} renderer={Popover}>
+                    <MenuTrigger>
+                      <View style={styles.menuIconContainer}>
+                      <Image
                         resizeMode="contain"
                         source={require('@/assets/icons/menu.png')}
                         style={[styles.menuIcon, {tintColor:'gray'}]}
                       />
-                  </MenuTrigger>
-                  <MenuOptions >
-
-
-                  {!iscurrentuserpost && <MenuOption  onSelect={() => 
-                    handleBlockUser({postcreatorid:post.user, postcreatorimage:post.profileImage,postcreatorusername:post.username})} 
-                    text='Block user' />}
-
-                  {iscurrentuserpost && <MenuOption onSelect={onDeletePost}>
-                      <View style={{flexDirection:'row'}}>
-
-                        <Image
-                          resizeMode="contain"
-                          source={require('@/assets/icons/deletepost.png')}
-                          style={{tintColor:'red',height:25,width:25}}
-                        />
-
-                        <Text style={{color:'red', marginStart:5}}>Delete post</Text>
-
                       </View>
+                    </MenuTrigger>
+                    <MenuOptions customStyles={{
+                      optionsContainer: {
+                        borderRadius: 12,
+                        padding: 8,
+                        width: 200,
+                        backgroundColor: colorScheme === 'dark' ? '#2A2A2A' : '#FFFFFF',
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 5,
+                        elevation: 6
+                      }
+                    }}>
+
+                      {!iscurrentuserpost && (
+                        <MenuOption onSelect={() => 
+                          handleBlockUser({postcreatorid:post.user, postcreatorimage:post.profileImage,postcreatorusername:post.username})
+                        }>
+                          <View style={styles.menuItemContainer}>
+                            <Ionicons name="person-remove-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
+                            <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Block user</Text>
+                          </View>
+                        </MenuOption>
+                      )}
+
+                      {iscurrentuserpost && (
+                        <MenuOption onSelect={onDeletePost}>
+                          <View style={styles.menuItemContainer}>
+                            <Ionicons name="trash-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
+                            <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Delete post</Text>
+                          </View>
+                        </MenuOption>
+                      )}
+
+                      {iscurrentuserpost && (
+                        <MenuOption onSelect={onCaptionEdit}>
+                          <View style={styles.menuItemContainer}>
+                            <Ionicons name="create-outline" size={20} color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} />
+                            <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>Edit caption</Text>
+                          </View>
+                        </MenuOption>
+                      )}
+
+                      {!iscurrentuserpost && (
+                        <MenuOption onSelect={postSharePress}>
+                          <View style={styles.menuItemContainer}>
+                            <Ionicons name="share-social-outline" size={20} color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} />
+                            <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>Share post</Text>
+                          </View>
+                        </MenuOption>
+                      )}
                       
-                    </MenuOption>}
-
-                    {!iscurrentuserpost && <MenuOption onSelect={postSharePress}>
-                      <View style={{flexDirection:'row'}}>
-
-                        <Image
-                          resizeMode="contain"
-                          source={require('@/assets/icons/sharing_post.png')}
-                          style={{tintColor:'gray',height:25,width:25}}
-                        />
-
-                        <Text style={{color:'black', marginStart:5}}>Share post</Text>
-
-                      </View>
-                      
-                    </MenuOption>}
-                  
-
-                    {!iscurrentuserpost &&<MenuOption onSelect={onReportDialogOpen}>
-                      <View style={{flexDirection:'row'}}>
-
-                        <Image
-                          resizeMode="contain"
-                          source={require('@/assets/icons/block.png')}
-                          style={{tintColor:'red',height:25,width:25}}
-                        />
-
-                        <Text style={{color:'red'}}>Report post</Text>
-
-                      </View>
-                      
-                    </MenuOption>}
-
-
-                   
-                  
-                  </MenuOptions>
+                      {!iscurrentuserpost && (
+                        <MenuOption onSelect={onReportDialogOpen}>
+                          <View style={styles.menuItemContainer}>
+                            <Ionicons name="flag-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
+                            <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Report post</Text>
+                          </View>
+                        </MenuOption>
+                      )}
+                    </MenuOptions>
                   </Menu>
 
 
@@ -786,81 +954,125 @@ const postpage = () => {
             )}
           </View>
 
+          { (post.peopleliked && post.peopleliked?.length > 2) &&
+
+          <TouchableOpacity onPress={handleLikesPress}>
+
+          <View style={styles.peopleLikedContainer}>
+          {post.peopleliked?.slice(0, 4).map((liker, index) => (
+            <Image 
+              key={liker.id || index}
+                  source={{ uri: liker.profileImage }}
+                  style={[styles.peopleLikedImage, { marginLeft: index > 0 ? -15 : 0 }]} 
+                />
+              ))}
+
+              <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}> Liked by </Text>
+
+              <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,fontWeight:'bold' }}>{post.peopleliked[0].name || "Linda"}</Text>
+
+              <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}> and </Text>
+
+              <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,fontWeight:'bold' }}>{"Others"}</Text>
+            </View>
+
+          </TouchableOpacity>
+
+          }
+
           <View style={styles.bottomIcons}>
-                <View style={styles.bottomIconsView}>
-                  <TouchableOpacity onPress={handleOnLiked}>
+            <TouchableOpacity onPress={handleOnLiked} style={styles.actionButton}>
+              <View style={[
+                styles.bottomIconsView, 
+                isLiked && {backgroundColor: 'rgba(222, 61, 80, 0.1)', borderColor: 'rgba(222, 61, 80, 0.3)'}
+              ]}>
+                <Image
+                  resizeMode="contain"
+                  source={!isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
+                  style={[styles.actionIcon, !isLiked && {tintColor: 'gray'}]}
+                />
+                <Text style={[
+                  styles.bottomIconsText,
+                  isLiked && {color: '#DE3D50', fontWeight: '500'}
+                ]}>
+                  {getFormatedString(likes)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton}>
+              <View style={[
+                styles.bottomIconsView, 
+                isShared && {backgroundColor: 'rgba(234, 93, 22, 0.2)', borderColor: 'rgba(234, 93, 22, 0.3)'}
+              ]}>
+                <Menu renderer={Popover}>
+                  <MenuTrigger>
                     <Image
                       resizeMode="contain"
-                      source={!isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
-                      style={[styles.menuIcon, !isLiked && {tintColor:'gray'}]}
+                      source={require('@/assets/images/refresh.png')}
+                      style={[
+                        styles.actionIcon, 
+                        !isShared && {tintColor: 'gray'}, 
+                        isShared && {tintColor: 'tomato'}
+                      ]}
                     />
-                  </TouchableOpacity>
-                  <Text style={styles.bottomIconsText}>{getFormatedString(likes)}</Text>
-                </View>
-
-                <View style={styles.bottomIconsView}>
-
-                  <Menu renderer={Popover} >
-                        <MenuTrigger >
+                  </MenuTrigger>
+                  <MenuOptions customStyles={{
+                    optionsContainer: {
+                      borderRadius: 12,
+                      padding: 4,
+                      backgroundColor: colorScheme === 'dark' ? '#2A2A2A' : '#FFFFFF',
+                      borderWidth: colorScheme === 'dark' ? 1 : 0.5,
+                      borderColor: colorScheme === 'dark' ? '#444444' : '#DDDDDD',
+                    }
+                  }}>
+                    <MenuOption onSelect={onRepostSelect}>
+                      <View style={styles.menuOptionItem}>
                         <Image
-                              resizeMode="contain"
-                              source={require('@/assets/images/refresh.png')}
-                              style={[styles.menuIcon,  !isShared && {tintColor:'gray'}, isShared && {tintColor:'tomato'}]}
-                            />
-                        </MenuTrigger>
-                        <MenuOptions >
+                          resizeMode="contain"
+                          source={require('@/assets/images/refresh.png')}
+                          style={{height: 20, width: 20, marginRight: 8}}
+                        />
+                        <Text style={styles.menuOptionText}>Repost</Text>
+                      </View>
+                    </MenuOption>
+                    <MenuOption>
+                      <View style={styles.cancelOption}>
+                        <Text style={{color: '#FF3B30'}}>Cancel</Text>
+                      </View>
+                    </MenuOption>
+                  </MenuOptions>
+                </Menu>
+                <Text style={[
+                  styles.bottomIconsText,
+                  isShared && {color: 'tomato', fontWeight: '500'}
+                ]}>
+                  {getFormatedString(shares)}
+                </Text>
+              </View>
+            </TouchableOpacity>
 
-                      
-                          <MenuOption onSelect={onRepostSelect}>
-                            <View style={{flexDirection:'row',marginHorizontal:10}}>
+            <TouchableOpacity onPress={handleCommentPress} style={styles.actionButton}>
+              <View style={styles.bottomIconsView}>
+                <Image
+                  resizeMode="contain"
+                  source={require('@/assets/images/chat.png')}
+                  style={[styles.actionIcon, {tintColor: 'gray'}]}
+                />
+                <Text style={styles.bottomIconsText}>{post.comments || 0}</Text>
+              </View>
+            </TouchableOpacity>
 
-                              <Image
-                                resizeMode="contain"
-                                source={require('@/assets/images/refresh.png')}
-                                style={{tintColor:'black',height:20,width:20}}
-                              />
-
-                              <Text style={{color:'black'}}>Repost</Text>
-
-                            </View>
-                            
-                          </MenuOption>
-
-                          <MenuOption>
-                            <View style={{alignItems:'center'}}>
-
-                              <Text style={{color:'red'}}>Cancel</Text>
-
-                            </View>
-                            
-                          </MenuOption>
-                        
-                        
-                        </MenuOptions>
-                    </Menu>
-                  
-                  <Text style={styles.bottomIconsText}>{getFormatedString(shares)}</Text>
-                </View>
-
-                <View style={styles.bottomIconsView}>
-                  <TouchableOpacity onPress={handleCommentPress}>
-                    <Image
-                      resizeMode="contain"
-                      source={require('@/assets/images/chat.png')}
-                      style={[styles.menuIcon, {tintColor:'gray'}]}
-                    />
-                  </TouchableOpacity>
-                  <Text style={styles.bottomIconsText}>{post.comments || 0}</Text>
-                </View>
-
-                {distanceString && <View style={styles.bottomIconsView}>
-                  <Image
-                    resizeMode="contain"
-                    source={require('@/assets/icons/location_small.png')}
-                    style={[styles.menuIcon, {tintColor:'gray'}]}
-                  />
-                  <Text style={styles.bottomIconsText}>{distanceString}</Text>
-                </View>}
+            {distanceString && (
+              <View style={styles.distanceContainer}>
+                <Image
+                  resizeMode="contain"
+                  source={require('@/assets/icons/location_small.png')}
+                  style={[styles.locationIcon, {tintColor: 'gray'}]}
+                />
+                <Text style={styles.distanceText}>{distanceString}</Text>
+              </View>
+            )}
           </View>
 
 
@@ -913,6 +1125,7 @@ const postpage = () => {
 
         {dialog && <MemoizedDialog 
           dialog={dialog} 
+          iscurrurentuser={iscurrentuserpost}
           setDialog={setDialog}
           handleBlockUserConfirmation={handleOnDialogPress} 
           blockinguserinfo={{postcreatorimage:oppuserinfo?.profileImage, postcreatorusername:oppuserinfo?.username}} 
@@ -925,6 +1138,9 @@ const postpage = () => {
           onRequestClose={() => setimageViewerVisible(false)}
         />
 
+        {
+          <InteractingUsers isVisible={isLikersModalVisible} onClose={handleLikersModalClose} info={post}/>
+        }
 
         {dialogDownLoad && <CustomDialog onclose={handleDialogClose}  isVisible={dialogDownLoad}>
 
@@ -956,7 +1172,16 @@ const postpage = () => {
 
         </CustomDialog>}
 
-        
+        {/* Replace the Caption Edit Bottom Sheet with the memoized component */}
+        <CaptionEditBottomSheet 
+          bottomSheetRef={captionEditSheetRef}
+          colorScheme={colorScheme}
+          newDescription={newDescription}
+          setNewDescription={setNewDescription}
+          loading={captionLoading}
+          handleSaveCaption={handleSaveCaption}
+          onSheetChange={(index) => setDescriptionEdit(index !== -1)}
+        />
 
         </SafeAreaView>
 
@@ -1024,7 +1249,6 @@ const styles = StyleSheet.create({
         shadowRadius: 3,
       },
       bottomIcons: {
-      
         flexDirection: 'row',
         justifyContent: 'space-between',
         marginTop: 5,
@@ -1038,5 +1262,74 @@ const styles = StyleSheet.create({
       bottomIconsView: {
         flexDirection: 'row',
         alignItems: 'center',
-      }
+        marginStart:15,
+        borderRadius:20,
+        marginBottom:10,
+        borderWidth:0.8,
+        borderColor:"gray",
+        padding:10
+      },
+      peopleLikedContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop:8,
+        marginBottom:10
+      },
+      peopleLikedImage: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        borderWidth: 2,
+        borderColor: 'white',
+      },
+      actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      actionIcon: {
+        width: 30,
+        height: 30,
+        paddingRight: 25,
+      },
+      menuOptionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      menuOptionText: {
+        color: 'black',
+        fontSize: 16,
+        fontWeight: 'bold',
+      },
+      cancelOption: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      distanceContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      locationIcon: {
+        width: 20,
+        height: 20,
+        paddingRight: 10,
+      },
+      distanceText: {
+        color: 'gray',
+        fontSize: 13,
+      },
+      menuIconContainer: {
+        width: 30,
+        height: 30,
+        paddingRight: 25,
+      },
+      menuItemContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      menuItemText: {
+        fontSize: 16,
+        marginLeft: 12,
+        fontWeight: '500',
+      },
 })

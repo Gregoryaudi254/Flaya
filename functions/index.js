@@ -30,6 +30,28 @@ const fs = require("fs");
 const sharp = require("sharp"); // For image processing
 
 
+const ALGOLIA_APP_ID = functions.config().algolia.app_id;
+const ALGOLIA_ADMIN_KEY = functions.config().algolia.admin_key;
+
+const algoliasearch = require("algoliasearch");
+
+// The client must be called as a function
+const client = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_ADMIN_KEY);
+
+const CONSUMER_KEY = functions.config().mpesa.consumer_key;
+const CONSUMER_SECRET = functions.config().mpesa.consumer_secret;
+const SHORTCODE = functions.config().mpesa.shortcode;
+const PASSKEY = functions.config().mpesa.passkey;
+
+const Mpesa = require("mpesa-api").Mpesa;
+const credentials = {
+  clientKey: CONSUMER_KEY,
+  clientSecret: CONSUMER_SECRET,
+  initiatorPassword: "YOUR_INITIATOR_PASSWORD_HERE",
+  securityCredential: "YOUR_SECURITY_CREDENTIAL",
+  certificatePath: null
+};
+
 exports.ActionOnReport = functions.firestore
   .document("reports/{reportType}/reports/{reportid}")
   .onUpdate(async (change, context) => {
@@ -425,9 +447,19 @@ async function sendNotification(token, payload) {
     },
   };
 
+  try {
   // Send the message using Firebase Admin SDK
   const response = await admin.messaging().send(notification);
   console.log("response", JSON.stringify(response));
+  } catch (error) {
+    if (error.code === "messaging/registration-token-not-registered") {
+      // Remove this token from your database
+      console.log("token error");
+    } else {
+      console.error("Unexpected FCM error:", error);
+    }
+  }
+  
   return;
 }
 
@@ -945,7 +977,16 @@ exports.onPostLiked = functions.firestore.document("users/{userid}/posts/{postid
 
   const data = snap.data();
 
+  // add popularity
+  const likerRef = db.collection("users").doc(likerid);
+  const likerSnap = await likerRef.get();
+  await snap.ref.update({popularity:likerSnap.data().popularity});
+
   const postref = db.collection("users").doc(postcreatorid).collection("posts").doc(postid);
+
+  await storeLikerInPeopleLiked(postref, likerSnap.data());
+
+  
   const snapshot = await postref.get();
   const post = snapshot.data();
 
@@ -1318,6 +1359,12 @@ exports.onActiveStoryAdded = functions.firestore
     console.log(`User ${userId} added to referral batch ${batchId}. Unique: ${isUniqueDevice}`);
   };
 
+async function deleteBusiness(userid, businessid) {
+  const businessRef = db.collection("businesses").doc(businessid);
+  await businessRef.delete();
+  return "Deleted";
+} 
+
 exports.OnUserUpdate = functions.firestore
   .document("users/{userid}")
   .onUpdate(async (snapshot, context) => {
@@ -1326,6 +1373,32 @@ exports.OnUserUpdate = functions.firestore
     const userId = context.params.userid;
 
     const userCoordinates = afterData.coordinates;
+
+    // submit business for approval
+    if (afterData.isbusinessaccount === false && (beforeData.isbusinessaccount === null || beforeData.isbusinessaccount === undefined)) {
+      const businessProcessingRef = db.collection("businessprocessing").doc(userId);
+      await businessProcessingRef.set({business:afterData.business, uid:userId});
+      console.log("submitted");
+    }
+
+
+    // approve business
+    if (afterData.isbusinessaccount === true && beforeData.isbusinessaccount === false) {
+      const status = await approveBusiness(userId);
+      console.log(JSON.stringify(status));
+    }
+
+    // delete business
+    if (afterData.isbusinessaccount === null && beforeData.isbusinessaccount === true) {
+      const status = await deleteBusiness(userId, beforeData.business.businessid);
+      console.log(status);
+    }
+
+    // Change profile photo to business
+    if (afterData.profilephoto !== beforeData.profilephoto && afterData.isbusinessaccount === true) {
+      const businessesDoc = geofirestore.collection("businesses").doc(afterData.business.businessid);
+      await businessesDoc.update({poster:afterData.profilephoto, ownerphoto:afterData.profilephoto});
+    }
 
     // add username to infoarray
     const beforeusername = beforeData.username;
@@ -1583,7 +1656,7 @@ exports.onChatAdded = functions.firestore
        const messageSnap = await db.collection("users").doc(chatInfo.receiverid).collection("messages").doc(messageid).get();
        const payload = {
         profilephoto:messageSnap.data().photo,
-        body:"new message",
+        body:messageSnap.data().message,
         title:messageSnap.data().username
        };
 
@@ -1899,7 +1972,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
       console.log("additional "+additionalPosts.length + " and total "+ posts.length);
     }
 
-    const seenIds = new Set();
+     const seenIds = new Set();
 
     console.log(posts.length+" leth of the posts");
 
@@ -1920,10 +1993,10 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
     });
 
     const seenPostsRef = db.collection("users").doc(userid).collection("seenposts");
-    
+
     // Get the latest document in 'seenposts'
     const snapshot = await seenPostsRef.orderBy("createdAt", "desc").limit(1).get();
-    
+
     // Process 'seenposts' and update accordingly
     if (!snapshot.empty) {
       const batch = db.batch();
@@ -1946,13 +2019,14 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
       await createNewSeenPostsDoc(seenPostsRef, posts);
     }
 
-    console.log("postlemgth "+postlength+ " posts"+posts.length);
+    // console.log("postlength "+postlength+ " posts"+posts.length);
 
     if (!snapshot.empty && postlength === 0 && (posts.length === 0 || posts.length < 12)) {
       const seenPostsData = snapshot.docs[0].data();
       const seenPosts = seenPostsData.posts || [];
 
       console.log("here");
+
       seenPosts.reverse();
       let extraposts = await getNearbyAndShuffle(seenPosts, userCoordinates, 40000);
 
@@ -1985,9 +2059,10 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
             .get()
         ]);
 
-        if (realPostSnap.exists) {
-          const postData = realPostSnap.data();
+      if (realPostSnap.exists) {
+        const postData = realPostSnap.data();
           const userData = usersnap.data();
+
           return {
             ...postData,
             username: userData.username,
@@ -2001,6 +2076,99 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
 
     // Filter out null values from failed retrievals
     const validPosts = fullPosts.filter(Boolean);
+
+    // Check if we need to fetch businesses (after the 10th post or if there aren't many posts)
+    if (postlength === 0 && userSnap.data().version === 5) {
+      // After checking for events, also check for businesses
+      const businessesGeoCollection = geofirestore.collection("businesses");
+
+      const userLat = userCoordinates.latitude;
+      const userLng = userCoordinates.longitude;
+
+      const query = businessesGeoCollection.near({
+        center: new admin.firestore.GeoPoint(userLat, userLng),
+        radius: 350, // Radius in kilometers (slightly larger than events)
+      });
+
+      // Fetch the nearest businesses, limit to 10
+      const businessSnap = await query.limit(10).get();
+
+      // Extract business data
+      const businesses = businessSnap.docs.map((doc) => {
+        const lat = doc.data().coordinates.latitude || doc.data().coordinates._latitude;
+        const lng = doc.data().coordinates.longitude || doc.data().coordinates._longitude;
+
+        const from = turf.point([userLng, userLat]);
+        const to = turf.point([lng, lat]);
+        const distance = turf.distance(from, to, {units: "kilometers"});
+
+        return {id: doc.id, ...doc.data(),
+        distance: distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`,
+        distanceValue: distance};
+      });
+
+      // If businesses were found, create an object
+      if (businesses.length > 0) {
+        // Sort by distance
+        businesses.sort((a, b) => a.distanceValue - b.distanceValue);
+
+        const businessesObject = {contentType: "business", businesses, id: "bus123"};
+
+        // Determine insertion position
+        if (validPosts.length > 3) {
+          validPosts.splice(3, 0, businessesObject); // Insert after the 10th item
+        } else {
+          validPosts.push(businessesObject); // Add at the end
+        }
+
+        console.log("Adding businesses:", JSON.stringify(businessesObject));
+      }
+    }
+
+    if (postlength === 0 && userSnap.data().version === 5) {
+      // Get events if any
+      const eventsgeocollection = geofirestore.collection("events");
+
+      const userLat = userCoordinates.latitude;
+      const userLng = userCoordinates.longitude;
+
+      const query = eventsgeocollection.near({
+        center: new admin.firestore.GeoPoint(userLat, userLng),
+        radius: 350, // Radius in kilometers
+      });
+
+      // Fetch the nearest events, limit to 10
+      const eventSnap = await query.limit(10).get();
+
+      // Extract event data
+      const events = eventSnap.docs.map((doc) => {
+        const lat = doc.data().location.coordinates.latitude || doc.data().coordinates._latitude;
+        const lng = doc.data().location.coordinates.longitude || doc.data().coordinates._longitude;
+
+        const from = turf.point([userLng, userLat]);
+        const to = turf.point([lng, lat]);
+        const distance = turf.distance(from, to, {units: "kilometers"});
+
+        return {id: doc.id, ...doc.data(),
+        distance: distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`,
+        distanceValue: distance};
+      });
+      // If events were found, create an object
+      if (events.length > 0) {
+        events.sort((a, b) => a.distanceValue - b.distanceValue);
+
+        const eventsObject = {contentType: "event", events, id:"id12"};
+
+        // Determine insertion position
+        if (validPosts.length > 6) {
+          validPosts.splice(6, 0, eventsObject); // Insert after the 5th item
+        } else {
+          validPosts.push(eventsObject); // Add at the end
+        }
+
+        console.log(JSON.stringify(eventsObject));
+      }
+    }
 
     console.log("posts size: "+posts.length);
     // Return the full posts
@@ -2044,12 +2212,12 @@ function getNearbyAndShuffle(list, center, radius = 40000) {
     
     // Limit to first 40 and use Fisher-Yates shuffle for better performance
     const limited = nearbyPosts.slice(0, 40);
-    for (let i = limited.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [limited[i], limited[j]] = [limited[j], limited[i]];
-    }
-    
-    return limited;
+  for (let i = limited.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [limited[i], limited[j]] = [limited[j], limited[i]];
+  }
+
+  return limited;
 }
 // Function to handle the logic
 // async function handleSeenPostsUpdate(userId, posts) {
@@ -2151,19 +2319,27 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
                     distance, // Attach computed distance
                 };
             })
-            .sort((a, b) => a.distance - b.distance);
+            .sort((a, b) => a.distance - b.distance)
+            .slice(0, 4);
 
-  console.log("areas", JSON.stringify(sortedResults));          
+  console.log("areas "+JSON.stringify(sortedResults.map((area) => {
+    return {latitude:area.coordinates._latitude, longitude:area.coordinates._longitude};
+  })));
+
+  // console.log("areas", JSON.stringify(sortedResults));          
 
   for (const areaData of sortedResults) {
     const areaLat = areaData.coordinates.latitude || areaData.coordinates._latitude;
     const areaLng = areaData.coordinates.longitude || areaData.coordinates._longitude;
     const areaRadius = areaData.radius || 500;
 
+    console.log("area info"+JSON.stringify(areaData));
+
     // Check if the user's area touches this area
     if (doCirclesTouch(userLat, userLng, simulation, areaLat, areaLng, areaRadius)) {
       const latestRef = db.collection("areas").doc(areaData.id).collection(period);
       
+      console.log("area found");
       // Parallel fetch of trending and regular posts
       const [trendingSnap, otherDocsSnap] = await Promise.all([
         latestRef.doc("trending").get(),
@@ -2234,15 +2410,15 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
 
   // Optimize similar posts fetching
   if (limit === 0) {
-    const interactionsRef = db.collection("users").doc(userid).collection("interactions");
-    const interactionsSnap = await interactionsRef
+  const interactionsRef = db.collection("users").doc(userid).collection("interactions");
+  const interactionsSnap = await interactionsRef
       .where("createdAt", ">=", threeDaysAgo)
-      .orderBy("createdAt", "desc")
+  .orderBy("createdAt", "desc")
       .where("interacted", "==", true)
       .limit(5)
-      .get();
+  .get();
 
-    console.log("size of interactions "+interactionsSnap.docs.length);
+    // console.log("size of interactions "+interactionsSnap.docs.length);
 
     // Parallel fetch of similar posts
     const similarQueries = interactionsSnap.docs.map((interactionDoc) => {
@@ -2261,7 +2437,7 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
 
     // Process similar posts
     for (const snap of similarSnapshots) {
-      if (!snap.empty) {
+        if (!snap.empty) {
         const doc = snap.docs[0];
         const similarPostsArray = doc.data().posts;
         similarPostsArray.sort((a, b) => b.createdAt - a.createdAt);
@@ -2270,7 +2446,7 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
         const filteredSimilarPosts = similarPostsArray.reduce((acc, post) => {
           if (acc.length >= 5) return acc;
           
-          const postId = post.postid || post.id || "";
+                const postId = post.postid || post.id || "";
           if (seenPostIds.has(postId) || post.postcreatorid === userid || blacklist.has(post.deviceid)) return acc;
 
           const postDate = post.createdAt && post.createdAt.toDate ? 
@@ -2290,7 +2466,7 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
           return acc;
         }, []);
 
-        similarPosts = similarPosts.concat(filteredSimilarPosts);
+              similarPosts = similarPosts.concat(filteredSimilarPosts);
       }
     }
   }
@@ -2322,7 +2498,7 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
         return acc;
       }, []);
     }
-    console.log("nearby posts "+nearbysubsPosts.length);
+    // console.log("nearby posts "+nearbysubsPosts.length);
   }
 
   // Restore post normalization and combining logic
@@ -2377,11 +2553,11 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
   const totalPosts = fillPosts([], sources, maxPosts);
   
   if (limit !== 0) {
-    console.log("limit "+totalPosts.length + " and limit is "+ limit);
+    // console.log("limit "+totalPosts.length + " and limit is "+ limit);
     return totalPosts.slice(0, limit);
   }
 
-  console.log(totalPosts.length+"length of total list");
+  // console.log(totalPosts.length+"length of total list");
   return totalPosts;
 }
 
@@ -2516,7 +2692,7 @@ exports.getStoriesNearby = functions.https.onRequest(async (req, res) => {
     const geocollection = geoFirestore.collection("storiesnearby");
     const query = geocollection.near({
       center: new admin.firestore.GeoPoint(latitude, longitude),
-      radius: 1, // Radius in km
+      radius: 10, // Radius in km
     });
 
     const storiesNearby = await query.get();
@@ -2972,6 +3148,47 @@ async function storeOldPosts(areaId, removedPosts, id) {
   }
 }
 
+async function storeLikerInPeopleLiked(postRef, interactingUserInfo) {
+  await admin.firestore().runTransaction(async (transaction) => {
+    const postDoc = await transaction.get(postRef);
+    if (!postDoc.exists) throw new Error("Post not found");
+  
+    const peopleliked = postDoc.data().peopleliked || [];
+  
+    // Create a new user object
+    const newUser = {
+      name: interactingUserInfo.username,
+      id: interactingUserInfo.uid,
+      profileImage: interactingUserInfo.profilephoto,
+      popularity: interactingUserInfo.popularity,
+    };
+  
+    // Check if the user is already in peopleliked
+    const existingIndex = peopleliked.findIndex((user) => user.id === newUser.id);
+    if (existingIndex !== -1) return; // Already liked, do nothing
+  
+    if (peopleliked.length < 6) {
+      // Less than 6 users, add new user and sort by popularity (desc)
+      peopleliked.push(newUser);
+    } else {
+      // More than or equal to 6, find the least popular user
+      peopleliked.sort((a, b) => b.popularity - a.popularity); // Ensure sorted
+      const leastPopularUser = peopleliked[peopleliked.length - 1];
+  
+      // If new user is more popular, replace the least popular one
+      if (newUser.popularity > leastPopularUser.popularity) {
+        peopleliked[peopleliked.length - 1] = newUser;
+      }
+    }
+  
+    // Always sort in descending order based on popularity
+    peopleliked.sort((a, b) => b.popularity - a.popularity);
+  
+    // Update Firestore
+    transaction.update(postRef, {peopleliked});
+  });
+}
+
 
 exports.OnUserInteracted = functions.firestore
   .document("users/{userid}/interactions/{postid}")
@@ -3024,6 +3241,8 @@ exports.OnUserInteracted = functions.firestore
 
       // Increment likes count
       postUpdateData.likes = admin.firestore.FieldValue.increment(1);
+      
+      // postUpdateData.peopleliked = admin.firestore.FieldValue.arrayUnion({name:interactingUserInfo.username, id:interactingUserInfo.uid, profileImage:interactingUserInfo.profilephoto, popularity:interactingUserInfo.popularity});
     }
 
     if (!sharingsBefore && sharingsAfter) {
@@ -3846,6 +4065,15 @@ exports.onPostCreated = functions.firestore
         return;
       }
 
+      // update business info if account is biusiness type
+      if (usersnap.data().isbusinessaccount === true) {
+        const business = {
+          name:usersnap.data().business.name || "name",
+          category:usersnap.data().business.category || "category",
+        };
+        await data.ref.update({business:business});
+      }
+
       await updateReferralBatchIfFirstPost(userid);
 
       // add post to tags if there is tags available
@@ -3995,20 +4223,20 @@ exports.onPostCreated = functions.firestore
         console.error("Error fetching touching circles:", error);  
       }
     });
-exports.processSubscriberChunk = functions.pubsub.topic("subscribed-posted").onPublish(async (message) => {
-  const {postId, postInfo, chunk} = message.json;
-  console.log("id:"+postId+ " info "+ JSON.stringify(postInfo));
-
-  const batch = db.batch();
-  chunk.forEach((subscriber) => {
-    const subscriptionRef = db.collection("users").doc(subscriber.id)
-                              .collection("postsubscriptions").doc(postId);
-    batch.set(subscriptionRef, postInfo);
-  });
-
-  await batch.commit();
-  console.log("Batch committed for chunk.");
-});
+    exports.processSubscriberChunk = functions.pubsub.topic("subscribed-posted").onPublish(async (message) => {
+      const {postId, postInfo, chunk} = message.json;
+      console.log("id:"+postId+ " info "+ JSON.stringify(postInfo));
+    
+      const batch = db.batch();
+      chunk.forEach((subscriber) => {
+        const subscriptionRef = db.collection("users").doc(subscriber.id)
+                                 .collection("postsubscriptions").doc(postId);
+        batch.set(subscriptionRef, postInfo);
+      });
+    
+      await batch.commit();
+      console.log("Batch committed for chunk.");
+    });
 
 
 async function updateSubscribers(userid, post, postid) {
@@ -4280,5 +4508,631 @@ async function updateReferralBatchIfFirstPost(userid) {
     console.error("Error updating referral posted status:", error);
   }
 }
+
+exports.getEventsNearby = functions.https.onCall(async (data, context) => {
+  try {
+    const userId = data.userId;
+    const category = data.category || null;
+    const limit = 25; // Always return 10 closest events
+
+    // Get user location
+    const userDoc = await admin.firestore().collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError("not-found", "User not found");
+    }
+
+    const userData = userDoc.data();
+    const userCoordinates = userData.coordinates;
+    
+    if (!userCoordinates) {
+      throw new functions.https.HttpsError("failed-precondition", "User location not found");
+    }
+
+    const userLat = userCoordinates._latitude || userCoordinates.latitude;
+    const userLng = userCoordinates._longitude || userCoordinates.longitude;
+
+    const availableEvents = data.events || [];
+
+    // Get already fetched event IDs (map to a Set for quick lookup)
+    const alreadyFetchedSet = new Set(availableEvents.map((event) => event.id));
+
+    // Create a GeoFirestore reference to the events collection
+    const eventsgeocollection = geofirestore.collection("events");
+
+    // GeoQuery (fetch more than needed)
+    const query = eventsgeocollection.near({
+      center: new admin.firestore.GeoPoint(userLat, userLng),
+      radius: 350, // Radius in kilometers
+    });
+
+    // Execute the query
+    const snapshot = await query.get();
+
+    if (snapshot.empty) {
+      return {event: true, events: []};
+    }
+
+    // Process results
+    let events = snapshot.docs
+      .map((doc) => {
+        const eventData = doc.data();
+
+        // Ensure location exists
+        if (!eventData.location) return null;
+
+        const eventLat = eventData.location.coordinates.latitude;
+        const eventLng = eventData.location.coordinates.longitude;
+
+        // Calculate distance using Turf.js
+        const from = turf.point([userLng, userLat]);
+        const to = turf.point([eventLng, eventLat]);
+        const distance = turf.distance(from, to, {units: "kilometers"});
+
+        return {
+          id: doc.id,
+          ...eventData,
+          distance: distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`,
+          distanceValue: distance, // Used for sorting
+        };
+      })
+      .filter((event) => event !== null) // Remove null entries
+      .filter((event) => !alreadyFetchedSet.has(event.id)); // Exclude already fetched events
+
+    // Sort by distance
+    events.sort((a, b) => a.distanceValue - b.distanceValue);
+
+    // Apply category filter manually
+    if (category) {
+      events = events.filter((event) => event.category === category);
+    }
+
+    // Limit to 10 closest events
+    events = events.slice(0, limit);
+
+    return { 
+      event: true,
+      events,
+    };
+  } catch (error) {
+    console.error("Error fetching events:", error);
+    throw new functions.https.HttpsError("internal", error.message);
+  }
+});
+
+// Approve Business Account and add to businesses collection
+async function approveBusiness(userid) {
+  try {
+    // Get the user data
+    const userRef = firestore.collection("users").doc(userid);
+    const userSnap = await userRef.get();
+
+    if (!userSnap.exists) {
+      throw new Error("User not found");
+    }
+
+    const userData = userSnap.data();
+
+    // Update the user's business account status
+    await userRef.update({
+      "isbusinessaccount":true,
+      "business.approved": true,
+      "business.approvedAt": admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // If approved, add to businesses geo collection
+    
+      // Create a GeoFirestore reference to the businesses collection
+    const businessesGeoCollection = geofirestore.collection("businesses");
+
+    // Extract business data from user
+    const businessData = {
+      businessname: userData.business.name,
+      category: userData.business.category,
+      address: userData.business.address,
+      poster: userData.business.poster || userData.profilephoto,
+      ownerid: userid,
+      ownername: userData.username,
+      ownerphoto: userData.profilephoto,
+      coordinates: new admin.firestore.GeoPoint(
+        userData.business.coordinates._latitude || userData.business.coordinates.latitude,
+        userData.business.coordinates._longitude || userData.business.coordinates.longitude
+      ),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    // Add to businesses collection with geo data
+    const businessRef = await businessesGeoCollection.add(businessData);
+
+    // Update user with businessId reference
+    await userRef.update({
+      "business.businessid": businessRef.id
+    });
+
+    await businessRef.update({id:businessRef.id});
+
+    return {
+      success: true,
+      message: "Business approved and added to businesses collection",
+      businessId: businessRef.id
+    };
+  } catch (error) {
+    console.error("Error approving business:", error);
+    throw new functions.https.HttpsError("internal", error.message);
+  }
+}
+
+// Get nearby businesses
+exports.getBusinessesNearby = functions.https.onCall(async (data, context) => {
+  try {
+    const userId = data.userId;
+    const category = data.category || null;
+    const limit = 25; // Always return 10 closest events
+
+    // Get user location
+    const userDoc = await admin.firestore().collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError("not-found", "User not found");
+    }
+
+    const userData = userDoc.data();
+    const userCoordinates = userData.coordinates;
+    
+    if (!userCoordinates) {
+      throw new functions.https.HttpsError("failed-precondition", "User location not found");
+    }
+
+    const userLat = userCoordinates._latitude || userCoordinates.latitude;
+    const userLng = userCoordinates._longitude || userCoordinates.longitude;
+
+    const availableBusinesses = data.businesses || [];
+
+    // Get already fetched event IDs (map to a Set for quick lookup)
+    const alreadyFetchedSet = new Set(availableBusinesses.map((business) => business.id));
+
+    // Create a GeoFirestore reference to the events collection
+    const businessgeocollection = geofirestore.collection("businesses");
+
+    // GeoQuery (fetch more than needed)
+    const query = businessgeocollection.near({
+      center: new admin.firestore.GeoPoint(userLat, userLng),
+      radius: 350, // Radius in kilometers
+    });
+
+    // Execute the query
+    const snapshot = await query.get();
+
+    if (snapshot.empty) {
+      return {business: true, businesses: []};
+    }
+
+    // Process results
+    let businesses = snapshot.docs
+      .map((doc) => {
+        const businessData = doc.data();
+
+        // Ensure location exists
+        if (!businessData.coordinates) return null;
+
+        const businessLat = businessData.coordinates.latitude || businessData.coordinates._latitude;
+        const businessLng = businessData.coordinates.longitude || businessData.coordinates._longitude;
+
+        // Calculate distance using Turf.js
+        const from = turf.point([userLng, userLat]);
+        const to = turf.point([businessLng, businessLat]);
+        const distance = turf.distance(from, to, {units: "kilometers"});
+
+        return {
+          id: doc.id,
+          ...businessData,
+          distance: distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`,
+          distanceValue: distance, // Used for sorting
+        };
+      })
+      .filter((business) => business !== null) // Remove null entries
+      .filter((business) => !alreadyFetchedSet.has(business.id)); // Exclude already fetched events
+
+    // Sort by distance
+    businesses.sort((a, b) => a.distanceValue - b.distanceValue);
+
+    // Apply category filter manually
+    if (category) {
+      businesses = businesses.filter((business) => business.category === category);
+    }
+
+    // Limit to 10 closest events
+    businesses = businesses.slice(0, limit);
+
+    return { 
+      business: true,
+      businesses,
+    };
+  } catch (error) {
+    console.error("Error fetching events:", error);
+    throw new functions.https.HttpsError("internal", error.message);
+  }
+});
+
+exports.onOrderReceived = functions.firestore
+  .document("users/{uid}/orders/{orderid}")
+  .onCreate(async (snap, context) => {
+    const businesscreatorid = context.params.uid;
+    const businessSnap = snap.data();
+
+    const creatorSnap = await db.collection("users").doc(businesscreatorid).get();
+    const businessInfo = creatorSnap.data().business;
+
+    // Send Notification to business
+    const payload = {
+      profilephoto: businessSnap.userPhoto,
+      body: "New order/booking from " + businessSnap.userName,
+      title: "Hey " + businessInfo.name,
+    };
+
+    console.log("token "+creatorSnap.data().token);
+
+    await sendNotification(creatorSnap.data().token, payload);
+    console.log("business"+JSON.stringify(payload));
+
+    // Send notification and submit order to admin
+    const payloadAdmin = {
+      profilephoto: businessSnap.userPhoto,
+      body: "New order/booking for " + businessInfo.name,
+      title: businessSnap.userName,
+    };
+
+    const adminSnap = await db
+      .collection("users")
+      .doc("UVEHaKV5QmUGbZ2PZ9y5Y4YduM03")
+      .get();
+
+    await sendNotification(adminSnap.data().token, payloadAdmin);
+    console.log("admin"+JSON.stringify(payload));
+
+    const order = {
+      ...businessSnap,
+      businessphoto:creatorSnap.data().profilephoto,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      business: businessInfo,
+    };
+
+    const currentOrdersRef = db.collection("orders").doc();
+    await currentOrdersRef.set(order); // <-- FIXED
+
+    return;
+  });
+
+
+  exports.syncPostToAlgolia = functions.firestore
+  .document("users/{userid}/posts/{postId}")
+  .onWrite(async (change, context) => {
+    const postId = context.params.postId;
+    const storeid = context.params.userid;
+
+    const index = client.initIndex("Products");
+
+    // Handle create or update
+    const data = change.after.data();
+
+    if (!data.business) return;
+
+    // Handle deletes
+    if (!change.after.exists) {
+      await index.deleteObject(postId);
+      console.log(`Post ${postId} removed from Algolia`);
+      return;
+    }
+
+    // Get store photo
+    const storeSnap = await db.collection("users").doc(storeid).get();
+    const business = {
+      ...data.business,
+      photo:storeSnap.data().profilephoto
+    };
+
+    const storeLocation = storeSnap.data().business.coordinates;
+    
+    // Ensure lat/lng is included for geo-search
+    const algoliaData = {
+      objectID: postId,
+      ...data,
+      business:business,
+      ...(storeLocation && {
+        _geoloc: {
+          lat: storeLocation.latitude || storeLocation._latitude,
+          lng: storeLocation.longitude || storeLocation._longitude,
+        }
+      }),
+      createdAt: data.createdAt || Date.now(),
+      // Add any other fields you need indexed
+    };
+
+    try {
+      await index.saveObject(algoliaData);
+      console.log(`Post ${postId} synced to Algolia`);
+    } catch (err) {
+      console.error("Error indexing to Algolia", err);
+    }
+  });
+
+  exports.syncStoresToAlgolia = functions.firestore
+  .document("users/{userid}")
+  .onWrite(async (change, context) => {
+    const storeid = context.params.userid;
+
+    const index = client.initIndex("Stores");
+
+    // Handle create or update
+    const data = change.after.data();
+
+    if (data.isbusinessaccount != true) return;
+
+    // Handle deletes
+    if (!change.after.exists) {
+      await index.deleteObject(storeid);
+      console.log(`Post ${storeid} removed from Algolia`);
+      return;
+    }
+
+    const businesscoordinates = data.business.coordinates;
+    
+    // Ensure lat/lng is included for geo-search
+    const algoliaData = {
+      objectID: storeid,
+      ...data,
+      ...(businesscoordinates && {
+        _geoloc: {
+          lat: businesscoordinates._latitude || businesscoordinates.latitude,
+          lng: businesscoordinates._longitude || businesscoordinates.longitude,
+        }
+      }),
+    
+    };
+
+    try {
+      await index.saveObject(algoliaData);
+      console.log(`Post ${storeid} synced to Algolia`);
+    } catch (err) {
+      console.error("Error indexing to Algolia", err);
+    }
+  });
+
+  exports.searchAlgolia = functions.https.onCall(async (data, context) => {
+    // Validate input parameters
+    const {query, userid} = data;
+
+    // Get user location
+    const userinfo = await db.collection("users").doc(userid).get();
+    const coordinates = userinfo.data().coordinates;
+
+    
+    if (!query) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Search query must be a non-empty string"
+      );
+    }
+  
+    try {
+      const productsIndex = client.initIndex("Products");
+      const storesIndex = client.initIndex("Stores");
+      
+      const results = {};
+      
+      // Common search parameters
+      const searchParams = {
+        hitsPerPage: 20,
+         aroundLatLng: coordinates.latitude && coordinates.longitude ? `${coordinates.latitude}, ${coordinates.longitude}` : null,
+         aroundRadius: 3000 || "all", // in meters, 'all' for no radius constraint
+      };
+  
+      // Search products if type is 'all' or 'products'
+      const productResults = await productsIndex.search(query, searchParams);
+      
+      results.products = [
+        ...productResults.hits.map((hit) => ({
+          ...hit,
+        }))
+      ];
+    
+      // Search stores if type is 'all' or 'stores'
+      const storeResults = await storesIndex.search(query, searchParams);
+      
+      results.stores = [
+        ...storeResults.hits.map((hit) => {
+          // Calculate distance using Turf.js
+          const from = turf.point([coordinates.longitude, coordinates.latitude]);
+          const to = turf.point([hit.coordinates._longitude, hit.coordinates._latitude]);
+          const distance = turf.distance(from, to, {units: "kilometers"});
+            
+          return {
+          poster:hit.profilephoto,
+          category:hit.business.category,
+          distance:distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`,
+          businessname:hit.business.name,
+          id:hit.uid,
+        };
+})
+      ];
+      
+      return {data:results};
+    } catch (error) {
+      console.error("Algolia search error:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Error performing search",
+        error.message
+      );
+    }
+  });
+
+  exports.getSubscriptionStatus = functions.https.onCall(async (data, context) => {
+    const {userid, postpage} = data;
+  
+    const userSnap = await db.collection("users").doc(userid).get();
+    const userData = userSnap.data();
+  
+    const currentSub = userData.subscription;
+
+    // Get monetization info
+    const monetizationInfo = await db.collection("information").doc("info").get();
+    const monetizationData = monetizationInfo.data();
+
+    if (postpage && monetizationData.monetizationinfo.isnormalaccountfree === true) {
+      return {status: "active", subscriptionType: null};
+    }
+  
+    if (!currentSub || !currentSub.endDate) {
+      return {status: "inactive", subscriptionType: null};
+    }
+
+    if (currentSub.accountType === "normal" && userData.isbusinessaccount === true) {
+      return {status: "inactive", subscriptionType: null};
+    }
+
+    // Convert Firebase Timestamp to JavaScript Date
+    const endDate = currentSub.endDate.toDate();
+    const now = new Date();
+  
+    // Create the "extra date" — 5 days after endDate
+    const extraDate = new Date(endDate);
+    extraDate.setDate(endDate.getDate() + 5);
+  
+    const diffInMs = endDate - now;
+    const diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24)); // Round up partial days
+  
+    const daysPassed = Math.ceil((now - endDate) / (1000 * 60 * 60 * 24));
+  
+    // Format readable endDate
+    const formattedEndDate = endDate.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+  
+    // Determine subscription status
+    if (now < endDate) {
+      return {
+        ...currentSub,
+        status: "active",
+        days: diffInDays,
+        period:"safe_period",
+        endDate: formattedEndDate
+      };
+    } else if (now >= endDate && now <= extraDate) {
+      return {
+        ...currentSub,
+        status: "active",
+        period:"grace_period",
+        days: daysPassed,
+        endDate: formattedEndDate
+      };
+    } else {
+      return {
+        ...currentSub,
+        status: "inactive",
+        endDate: formattedEndDate
+      };
+    }
+  });
+
+  // Import subscription handlers
+  const mpesaCallbackHandler = require("./subscriptionHandlers/mpesaCallbackHandler");
+  const subscriptionExpiryHandler = require("./subscriptionHandlers/subscriptionExpiryHandler");
+
+  // ... existing code remains unchanged
+
+  // Update the mpesaCallback function to use our handler
+  exports.mpesaCallback = functions.database.ref("MpesaCallBack/{userid}/{plan}/{uniqueKey}/Body/stkCallback")
+    .onCreate(mpesaCallbackHandler.handleMpesaCallback);
+
+  // Cloud Function to check subscription expiry
+  exports.checkSubscriptionExpiry = functions.https.onRequest(subscriptionExpiryHandler.checkSubscriptionExpiry);
+
+  // ... existing code ...
+
+  // M-Pesa payment push function for subscriptions
+  exports.mpesaPush = functions.https.onCall(async (data, context) => {
+    const {userid, phone, plan, isUpgrade} = data;
+
+    if (!userid || !phone) {
+      console.error("Missing required parameters for mpesaPush");
+      return {error: "Missing required parameters"};
+    }
+
+    // Check if user exists
+    const usersnap = await db.collection("users").doc(userid).get();
+    if (!usersnap.exists) {
+      console.error(`User ${userid} not found`);
+      return {error: "User not found"};
+    }
+
+    const userData = usersnap.data() || {};
+    const accountType = userData.isbusinessaccount === true ? "business" : "normal";
+
+    // check if there is already a plan
+    const subscription = userData.subscription;
+    let currentPlan = null;
+    if (subscription && !isUpgrade) {
+      currentPlan = subscription.subscriptionType;
+    }
+
+    console.log("Plan selected:", currentPlan ? currentPlan : plan);
+    console.log("Account type:", accountType);
+
+    const mpesa = new Mpesa(credentials, "production");
+
+    try {
+      const response = await mpesa.lipaNaMpesaOnline({
+        BusinessShortCode: SHORTCODE,
+        passKey: PASSKEY,
+        TransactionDesc: `Flaya ${currentPlan ? currentPlan : plan} Subscription`, 
+        TransactionType: "CustomerPayBillOnline",
+        PartyA: phone,
+        PartyB: SHORTCODE,
+        Amount: "1", // example amount
+        AccountReference: "Account Reference",
+        CallBackURL: `https://flaya-9ebb2-default-rtdb.firebaseio.com/MpesaCallBack/${userid}/${currentPlan ? currentPlan : plan}.json`,
+        PhoneNumber: phone
+      });
+      
+      console.log("Payment push response:", response);
+      return {
+        success: true, 
+        data: response, 
+        message: `Payment request sent to ${phone}. Please check your phone to complete the transaction.`
+      };
+    } catch (error) {
+      console.error("Payment push failed:", error);
+      return {
+        success: false, 
+        error: error.message,
+        message: "Failed to initiate payment. Please try again later."
+      };
+    }
+  });
+
+  exports.getPaymentPlans = functions.https.onCall(async (data, context) => {
+    const {userid} = data;
+    const userSnap = await db.collection("users").doc(userid).get();
+    const userData = userSnap.data();
+
+    const accountType = userData.isbusinessaccount === true ? "business" : "normal";
+
+    const plans = await db.collection("information").doc("info").get();
+    const plansData = plans.data();
+
+    if (accountType === "business") {
+      console.log("Business account");
+      return {
+        plans: plansData.businesspayment
+      };
+    } else {
+      console.log("Normal account");
+      return {
+        plans: plansData.businesspayment
+      };
+    }
+  });
 
 

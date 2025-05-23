@@ -194,6 +194,7 @@ const StoriesItem = React.memo(({ activeStory, item, isStoriesVisible, stories }
   useEffect(() => {
     const handleVideoPlayback = async () => {
       if (!videoRef.current || !isStoriesVisible || activeStory !== item.id) {
+        console.log("returning "+isStoriesVisible)
         return;
       }
 
@@ -413,7 +414,7 @@ const Stories = React.memo(({ stories, isStoriesVisible, setActiveStory }) => {
           stories={stories}
           item={item}
         />
-  ), [activeStoryID, isStoriesVisible,stories]);
+  ), [activeStoryID, isStoriesVisible, stories]);
 
   const keyExtractor = useCallback((story) => story.id, []);
 

@@ -233,7 +233,6 @@ const index = () => {
                   isVisible={isFullWidthModalVisible}
                   onClose={handleModalClose}
                   info={selectedcollectionInfo}
-                
                 />
 
               {(updates.length === 0 && !isrefreshing) && <Text style={{color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,fontSize:20,alignSelf:'center', position:'absolute',marginTop:100,fontFamily:'Lato'}}>No updates yet!</Text>}

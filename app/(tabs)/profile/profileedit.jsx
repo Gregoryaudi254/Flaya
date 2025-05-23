@@ -1,9 +1,9 @@
-import { StyleSheet, Text, View,Image,TextInput, TouchableOpacity,ActivityIndicator } from 'react-native'
+import { StyleSheet, Text, View,Image,TextInput, TouchableOpacity,ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Dimensions } from 'react-native'
 import React,{useState,useLayoutEffect,useCallback,useEffect,useRef} from 'react'
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/constants/Colors';
 
-import {useNavigation} from 'expo-router'
+import {router, useNavigation, Stack} from 'expo-router'
 
 import { debounce } from 'lodash';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
@@ -13,7 +13,17 @@ import { useToast } from 'react-native-toast-notifications';
 import { getImageDownloadUrl } from '@/constants/common';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
+import BusinessInfoEditSheet from '@/components/BusinessInfoEditSheet';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import CustomDialog from '@/components/CustomDialog';
+import { setData } from '@/slices/dataChangeSlice';
+import { useDispatch } from 'react-redux';
+import { Ionicons } from '@expo/vector-icons';
+
+import { useSelector } from 'react-redux';
+
+const { width } = Dimensions.get('window');
 
 function cleanString(str) {
   return str.trim()           // Remove spaces from start and end
@@ -21,9 +31,11 @@ function cleanString(str) {
             .toLowerCase();        // Convert to lowercase
 }
 
-const profileedit = () => {
+const ProfileEditScreen = () => {
+  const dispatch = useDispatch();
 
   const colorScheme = useColorScheme()
+  const isDark = colorScheme === 'dark';
 
   const [selectedImage, setSelectedImage] = useState(null);
   const [isLoaded,setLoaded] = useState(false)
@@ -163,13 +175,12 @@ const profileedit = () => {
     await updateDoc(reference, newdata);
     setLoading(false);
 
+    dispatch(setData({id:"profileedit", intent:"accountinfochange"}))
+
     await storeData('@profile_info',userinfo)
 
   };
   
-
-  
-
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -205,20 +216,23 @@ const profileedit = () => {
  
 
  
+  const [userdata, setUserData] = useState(null);
 
   const getUserData = useCallback(async()=>{
-    const userInfo = await getData('@profile_info')
+    const userInfo = await getData('@profile_info');
 
     const ref = doc(db, `users/${userInfo.uid}`);
 
     const snap = await getDoc(ref);
-    const data = snap.data()
+    const data = snap.data();
+
+    setUserData(data);
 
     setUsername(data.username);
     setCaption(data.caption);
     setName(data.name);
     setImageSource(data.profilephoto);
-
+    
     setLoaded(true)
 
   });
@@ -260,7 +274,6 @@ const profileedit = () => {
   // Debounced function to check availability
   const debouncedCheckAvailability = useCallback(
     debounce(async (text) => {
-
       if (latestValue.current !== text) return; 
 
       setUsernameLoading(true);
@@ -294,119 +307,607 @@ const profileedit = () => {
 
 
 
+  const handleEditPress = () => {
+    handleEditBusinessInfo();
+  };
 
- 
+  const truncateText = (text) => {
+    return text.length > 10 ? text.slice(0, 10) + "..." : text;
+  };
+
+  const businessInfoSheetRef = useRef(null);
+  
+  const [editSection, setEditSection] = useState(null);
+
+  const handleBusinessInfoUpdate = (updatedInfo) => {
+    setUserData(prev => ({
+      ...prev,
+      business: {
+        ...prev.business,
+        ...updatedInfo
+      }
+    }));
+  };
+  
+  const handleEditBusinessInfo = () => {
+    if (businessInfoSheetRef.current) {
+      businessInfoSheetRef.current.snapToIndex(1);
+    }
+  };
+
+  const [dialog, setDialog] = useState(false);
+  const [isDeletingAccount, setDeletingAccount] = useState(false);
+
+  const onDeleteAccount = useCallback(async() =>{
+    setDeletingAccount(true);
+
+    setLoading(true)
+    const userinfo = await getData('@profile_info')
+    const userRef = doc(db, `users/${userinfo.uid}`);
+
+    await updateDoc(userRef, {business:null, isbusinessaccount:null});
+
+    dispatch(setData({id:"pending", intent:'accountchange'}));
+
+    router.back();
+  });
+
+
+  const handleDialogClose = () =>{
+    setDialog(false)
+  }
+
+  const [isLoadingDeleteProcess, setLoadingDeleteAccount] = useState(false);
+  const [isDropdownvisible, setDropDownVisible] = useState(false);
+  const openDialog = () =>{
+    setDropDownVisible(false)
+    setDialog(true)
+  }
+
+  const { value } = useSelector(state => state.data);
+
+  useEffect(() => {
+    if (value !== null && value.intent === "categorychange") {
+
+       // Update local state
+    setUserData(prev => ({
+      ...prev,
+      business: {
+        ...prev?.business,
+        category: value.category
+      }
+    }));
+     
+    }
+  },[value]);
+
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack.Screen
+        options={{
+          title: "Edit Profile",
+          headerRight: () => {
+            if (loading) {
+              return (
+                <ActivityIndicator style={{ marginEnd: 20 }} size="small" color={isDark ? Colors.light_main : Colors.dark_main} />
+              );
+            }
 
+            if (changed) {
+              return (
+                <TouchableOpacity
+                  style={{ marginRight: 15 }}
+                  onPress={handleSave}
+                >
+                  <Text style={{ color: Colors.blue, fontWeight: '600', fontSize: 16 }}>Save</Text>
+                </TouchableOpacity>
+              );
+            }
+            return null;
+          },
+        }}
+      />
 
-    <View >
-      {isLoaded ? <View style={{marginHorizontal:10,marginVertical:20}}> 
+      <KeyboardAvoidingView 
+        style={{ flex: 1, backgroundColor: isDark ? Colors.dark_main : Colors.light_main }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 50 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {isLoaded ? (
+            <View style={{ padding: 16 }}>
+              <View style={[styles.profileSection, { backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF' }]}>
+                <TouchableOpacity 
+                  style={styles.profileImageContainer}
+                  onPress={pickImageAsync}
+                >
+                  <Image 
+                    source={{ uri: imageSource }} 
+                    style={styles.profileImage}
+                  />
+                  <View style={styles.cameraIconContainer}>
+                    <Ionicons name="camera" size={18} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
+                
+                <Text style={[styles.usernameDisplay, { color: isDark ? '#BBBBBB' : '#666666' }]}>
+                  @{username}
+                </Text>
+              </View>
 
+              <View style={[styles.formCard, { backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF' }]}>
+                <Text style={[styles.sectionTitle, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
+                  Personal Information
+                </Text>
 
-      <TouchableOpacity onPress={pickImageAsync}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Name</Text>
+                  <TextInput 
+                    style={[
+                      styles.textInput,
+                      { 
+                        color: isDark ? Colors.light_main : Colors.dark_main,
+                        backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5'
+                      }
+                    ]}
+                    placeholder='Enter your full name'
+                    placeholderTextColor='gray'
+                    value={name}
+                    onChangeText={(text) => {
+                      setName(text);
+                      setChanged(true);
+                    }}
+                  />
+                </View>
 
-        <Image  source={{uri:imageSource}} 
-            style={styles.profileImage} />
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Username</Text>
+                  <View style={styles.usernameInputContainer}>
+                    <TextInput 
+                      style={[
+                        styles.textInput,
+                        { 
+                          color: isDark ? Colors.light_main : Colors.dark_main,
+                          backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5',
+                          paddingRight: 40
+                        }
+                      ]}
+                      placeholder='Choose a unique username'
+                      placeholderTextColor='gray'
+                      value={username}
+                      onChangeText={setUsername}
+                    />
+                    <View style={styles.usernameStatusContainer}>
+                      {usernameloading && 
+                        <ActivityIndicator color={Colors.blue} size="small" />
+                      }
+                      {!usernameloading && isAvailable !== null && username.length > 0 && (
+                        <Ionicons 
+                          name={isAvailable ? "checkmark-circle" : "close-circle"} 
+                          size={22} 
+                          color={isAvailable ? "#34C759" : "#FF3B30"}
+                        />
+                      )}
+                    </View>
+                  </View>
+                  {!isAvailable && !usernameloading && username.length > 0 && (
+                    <Text style={styles.errorMessage}>Username already taken</Text>
+                  )}
+                  {hasSpacesOrSpecialChars(username) && username.length > 0 && (
+                    <Text style={styles.errorMessage}>No spaces or special characters allowed</Text>
+                  )}
+                </View>
 
-      </TouchableOpacity>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Bio</Text>
+                  <TextInput 
+                    style={[
+                      styles.textInput,
+                      styles.bioInput,
+                      { 
+                        color: isDark ? Colors.light_main : Colors.dark_main,
+                        backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5'
+                      }
+                    ]}
+                    placeholder='Write something about yourself...'
+                    placeholderTextColor='gray'
+                    value={caption}
+                    onChangeText={(text) => {
+                      setCaption(text);
+                      setChanged(true);
+                    }}
+                    multiline={true}
+                    numberOfLines={Platform.OS === 'ios' ? undefined : 4}
+                    maxLength={80}
+                  />
+                  <Text style={[
+                    styles.charCount, 
+                    caption && caption.length > 70 ? { color: '#FF9500' } : {}
+                  ]}>
+                    {caption ? caption.length : 0}/80
+                  </Text>
+                </View>
+              </View>
 
+              {userdata?.isbusinessaccount === true && (
+                <View style={[styles.formCard, { backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF', marginTop: 16 }]}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
+                      Business Information
+                    </Text>
+                    <View style={[styles.badge, { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.2)' : 'rgba(0, 122, 255, 0.1)' }]}>
+                      <Text style={styles.badgeText}>Business</Text>
+                    </View>
+                  </View>
 
+                  <TouchableOpacity 
+                    style={styles.businessInfoItem}
+                    onPress={() => router.push('/profile/businesscategory')}
+                  >
+                    <View>
+                      <Text style={[styles.infoLabel, { color: isDark ? '#BBBBBB' : '#666666' }]}>
+                        Category
+                      </Text>
+                      <Text style={[styles.infoValue, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
+                        {userdata?.business?.category || "Not set"}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={isDark ? '#BBBBBB' : '#666666'} />
+                  </TouchableOpacity>
 
-      <Text style={{fontSize:15,color:'gray',marginTop:10}}>Name</Text>
+                  <TouchableOpacity 
+                    style={styles.businessInfoItem}
+                    onPress={handleEditPress}
+                  >
+                    <View>
+                      <Text style={[styles.infoLabel, { color: isDark ? '#BBBBBB' : '#666666' }]}>
+                        Business Name
+                      </Text>
+                      <Text style={[styles.infoValue, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
+                        {userdata?.business?.name || "Not set"}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={isDark ? '#BBBBBB' : '#666666'} />
+                  </TouchableOpacity>
 
+                  <TouchableOpacity 
+                    style={styles.businessInfoItem}
+                    onPress={handleEditPress}
+                  >
+                    <View>
+                      <Text style={[styles.infoLabel, { color: isDark ? '#BBBBBB' : '#666666' }]}>
+                        Address
+                      </Text>
+                      <Text style={[styles.infoValue, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
+                        {userdata?.business?.address ? truncateText(userdata?.business?.address) : "Not set"}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={isDark ? '#BBBBBB' : '#666666'} />
+                  </TouchableOpacity>
 
-      <View style={{flexDirection:'row',marginTop:10}}>
+                  <TouchableOpacity 
+                    style={[styles.businessInfoItem, { borderBottomWidth: 0 }]}
+                    onPress={handleEditPress}
+                  >
+                    <View>
+                      <Text style={[styles.infoLabel, { color: isDark ? '#BBBBBB' : '#666666' }]}>
+                        Contact Information
+                      </Text>
+                      <Text style={[styles.infoValue, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
+                        Email, phone number
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={isDark ? '#BBBBBB' : '#666666'} />
+                  </TouchableOpacity>
 
-
-          <TextInput 
-              style={{color:colorScheme === 'dark'? Colors.light_main:Colors.dark_main,flex:1}}
-              placeholder='Enter your full name'
-              placeholderTextColor='gray'
-              value={name}
-              onChangeText={setName}
-          />
-
-
-      </View>
-
-
-      <View style={{height:1,width:'100%',backgroundColor:colorScheme === 'dark'? Colors.light_main:Colors.dark_main,marginTop:10,marginBottom:10}}/>
-
-
-      <Text style={{fontSize:15,color:'gray'}}>username</Text>
-
-
-      <View style={{flexDirection:'row',marginTop:10}}>
-
-
-          <TextInput 
-                  style={{color:colorScheme === 'dark'? Colors.light_main:Colors.dark_main,flex:1}}
-                  placeholder='Name that is unique'
-                  value={username}
-                  onChangeText={setUsername}
-                  
-                  placeholderTextColor='gray'
-              />
-
-
-
-              
-          {usernameloading && <ActivityIndicator style={{marginEnd:10}} color={Colors.blue} />}
-
-          {!usernameloading&& isAvailable !== null && (
-            <View style={{height:20,width:20}}>
-
-                <Image
-                style={{height:20,width:20,marginEnd:10,paddingRight:5,marginRight:10,marginTop:5,alignSelf:'center'}} 
-                source={isAvailable ? require('@/assets/icons/check.png') : require('@/assets/icons/incorrect.png')}/>
-
+                  <TouchableOpacity
+                    style={styles.deleteBusinessButton}
+                    onPress={openDialog}
+                    disabled={loading}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" style={{ marginRight: 10 }} />
+                    <Text style={styles.deleteButtonText}>Delete Business Account</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-            
+          ) : (
+            <ActivityIndicator 
+              style={{ marginTop: 100 }} 
+              size="large" 
+              color={isDark ? Colors.light_main : Colors.dark_main} 
+            />
           )}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-      </View>
+      {userdata && (
+        <BusinessInfoEditSheet
+          ref={businessInfoSheetRef}
+          userId={userdata.uid}
+          business={userdata?.business}
+          onUpdate={handleBusinessInfoUpdate}
+        />
+      )}
 
-
-      <View style={{height:1,width:'100%',backgroundColor:colorScheme === 'dark'? Colors.light_main:Colors.dark_main,marginTop:10,marginBottom:10}}/>
-
-
-      <Text style={{fontSize:15,color:'gray'}}>Brief caption</Text>
-
-
-      <View style={{flexDirection:'row',marginTop:10}}>
-
-
-          <TextInput 
-                  style={{color:colorScheme === 'dark'? Colors.light_main:Colors.dark_main,flex:1}}
-                  placeholder='Caption..'
-                  value={caption}
-                  onChangeText={setCaption}
-                  placeholderTextColor='gray'
-              />
-
-      </View>
-
-
-      <View style={{height:1,width:'100%',backgroundColor:colorScheme === 'dark'? Colors.light_main:Colors.dark_main,marginTop:10}}/>
-
-
-
-      
-
-      </View> : <ActivityIndicator style={{alignSelf:'center',marginTop:70}} size="large" color={colorScheme === 'dark'? Colors.light_main:Colors.dark_main}/>}
-
-    </View>
-
-    
+      <CustomDialog onclose={handleDialogClose} isVisible={dialog}>
+        {!isDeletingAccount ? (
+          <View style={styles.dialogContent}>
+            <Ionicons name="alert-circle" size={50} color="#FF3B30" style={{ marginBottom: 16 }} />
+            <Text style={styles.dialogTitle}>Delete Business Account?</Text>
+            <Text style={styles.dialogMessage}>
+              This process is irreversible. All your business information will be permanently deleted.
+            </Text>
+            
+            <View style={styles.dialogButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={handleDialogClose}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.confirmDeleteButton}
+                onPress={onDeleteAccount}
+              >
+                <Text style={styles.confirmDeleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.dialogContent, { minHeight: 200, justifyContent: 'center' }]}>
+            <ActivityIndicator size="large" color="white" />
+            <Text style={[styles.dialogMessage, { marginTop: 20, marginBottom: 0 }]}>Deleting business account...</Text>
+          </View>
+        )}
+      </CustomDialog>
+    </GestureHandlerRootView>
   )
 }
 
-export default profileedit
+export default ProfileEditScreen
 
 const styles = StyleSheet.create({
-  profileImage:{width:100,height:100,
-    borderColor:'white',
-    borderWidth:3,borderRadius:50,marginEnd:10,
-    marginStart:20,alignSelf:'center'}
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderColor: 'rgba(255,255,255,0.3)',
+    borderWidth: 2,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 15,
+  },
+  saveButton: {
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal:50,
+    marginTop: 20,
+    marginBottom: 30,
+    flexDirection: 'row',
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  }, 
+  saveIcon: {
+    marginRight: 10,
+  },
+  formGroup: {
+    marginBottom: 15,
+  },
+  label: {
+    fontSize: 14,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  text: {
+    fontSize: 16,
+  },
+  categoryUpdateButton: {
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 15,
+    alignSelf: 'flex-end',
+  },
+  categoryUpdateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  profileSection: {
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  profileImageContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  cameraIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.blue,
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  usernameDisplay: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#888888',
+    marginTop: 8,
+  },
+  formCard: {
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+    color: '#888888',
+  },
+  textInput: {
+    minHeight: 48,
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(200,200,200,0.3)',
+    fontSize: 16,
+  },
+  usernameInputContainer: {
+    position: 'relative',
+  },
+  usernameStatusContainer: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  errorMessage: {
+    color: '#FF3B30',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  bioInput: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+    paddingTop: 12,
+  },
+  charCount: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    fontSize: 12,
+    color: '#888888',
+  },
+  businessInfoItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(200,200,200,0.15)',
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 16,
+  },
+  deleteBusinessButton: {
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    backgroundColor: '#FF3B30',
+    flexDirection: 'row',
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dialogContent: {
+    padding: 20,
+    backgroundColor: Colors.dark_gray,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  dialogTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: 'white',
+    textAlign: 'center',
+  },
+  dialogMessage: {
+    fontSize: 16,
+    marginBottom: 24,
+    color: '#DDDDDD',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  dialogButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#444444',
+    marginRight: 10,
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmDeleteButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    marginLeft: 10,
+  },
+  confirmDeleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  badge: {
+    padding: 4,
+    borderRadius: 4,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: Colors.blue,
+  },
 })

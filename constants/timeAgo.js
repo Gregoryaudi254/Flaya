@@ -22,6 +22,6 @@ export const timeAgo = (timestamp) => {
     } else if (diffInWeeks < 4) {
         return `${diffInWeeks}w`;
     } else {
-        return `${diffInMonths}m`;
+        return `${diffInMonths === 0 ? 1: diffInMonths}m`;
     }
 };

@@ -58,6 +58,8 @@ import CircularProgress from "react-native-circular-progress-indicator";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import DownLoadMediaItem from "@/components/DownloadMediaItem";
+import InteractingUsers from '@/components/Likers'
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 
 const home = () => {
@@ -551,6 +553,20 @@ const home = () => {
         setDialogDownLoad(true);
         handleSharePostPress(mediaUrls[0],type, uid, postid)
       });
+
+
+      const [seletedPost, setSelectedPost] = useState(null);
+      const [isLikersModalVisible, setLikersModalVisible] = useState(false);
+      const handleLikesPress = useCallback((post) => {
+        setSelectedPost(post);
+        setLikersModalVisible(true);
+      });
+
+      const handleLikersModalClose = () =>{
+        setLikersModalVisible(false)
+        setSelectedPost(null);
+      }
+
     
   const renderItem = useCallback(
     ({ item }) => (
@@ -569,6 +585,7 @@ const home = () => {
         sharesMap={sharesMap}
         setSharesMap={setSharesMap}
         handleSharePostPress={postSharePress}
+        handleLikersPress={handleLikesPress}
       />
     ),
     [memoizedUserinfo, isBottomSheetOpen, setIsBottomSheetOpen, handleCommentIconPress, handlePlayPress, onImagePress, handleReportPress, handleRemovePost, handleBlockUser,likesMap,setLikesMap,sharesMap,setSharesMap, activePost, postSharePress]
@@ -668,7 +685,7 @@ const home = () => {
             const pos = postsRef.current.findIndex(item => item.id === newActivePost);
             setStoriesVisible(pos <= 0);
 
-            console.log("stories visiblity ", activepostRef.current+" and "+ postsRef.current.length);
+            console.log("stories visiblity ", pos);
             
             viwableId.current = newActivePost;
           }
@@ -691,6 +708,8 @@ const home = () => {
         setIsFullWidthModalVisible(false)
         setCurrentSelectedPost(null)
       }
+
+      
 
 
       const toast = useToast();
@@ -968,21 +987,65 @@ const home = () => {
             </View> : <View></View>}
   
   
-          {isUploading && <View style={{width:'100%',marginVertical:10,marginHorizontal:10}}>
-  
-            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}>Uploading {uploadingItem.contentType}</Text>
-  
-            <View style={{flexDirection:'row',marginTop:5}}>
-  
-              <Image style={{ width: 50, height: 50 ,borderRadius:5}} 
-              source={{uri:uploadingItem.contentType === 'image' ? uploadingItem.content[0] : uploadingItem.thumbnail}} />
-              <View style={{ height: 4, backgroundColor: 'tomato', width: `${uploadProgress}%`,borderRadius:2 ,marginStart:5,maxWidth:'80%'}} />
-              
+          {isUploading && (
+            <View style={styles.uploadProgressContainer}>
+              <View style={[styles.uploadProgressCard, { backgroundColor: colorScheme === 'dark' ? '#1E1E1E' : '#FFFFFF' }]}>
+                <View style={styles.uploadProgressHeader}>
+                  <Text style={[styles.uploadingText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>
+                    Uploading {uploadingItem?.contentType === 'image' ? 'Photo' : 'Video'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={() => dispatch(finishUpload())}
+                  >
+                    <Ionicons 
+                      name="close" 
+                      size={20} 
+                      color={colorScheme === 'dark' ? '#BBBBBB' : '#666666'} 
+                    />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.uploadProgressContent}>
+                  <View style={styles.thumbnailContainer}>
+                    <Image 
+                      style={styles.uploadThumbnail} 
+                      source={{uri: uploadingItem?.contentType === 'image' ? uploadingItem?.content[0] : uploadingItem?.thumbnail}} 
+                    />
+                    {uploadingItem?.contentType === 'video' && (
+                      <View style={styles.videoIndicator}>
+                        <Ionicons name="play" size={12} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </View>
+                  
+                  <View style={styles.progressInfoContainer}>
+                    <View style={styles.progressTextContainer}>
+                      <Text style={[styles.uploadStatusText, {color: colorScheme === 'dark' ? '#BBBBBB' : '#666666'}]}>
+                        {uploadProgress < 100 ? 'Uploading...' : 'Processing...'}
+                      </Text>
+                      <Text style={[styles.uploadPercentText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>
+                        {Math.round(uploadProgress)}%
+                      </Text>
+                    </View>
+                    
+                    <CircularProgress
+                      value={uploadProgress}
+                      radius={25}
+                      duration={300}
+                      progressValueColor={'transparent'}
+                      titleColor={'transparent'}
+                      activeStrokeColor={Colors.blue}
+                      inActiveStrokeColor={colorScheme === 'dark' ? '#333333' : '#EEEEEE'}
+                      inActiveStrokeOpacity={0.5}
+                      inActiveStrokeWidth={4}
+                      activeStrokeWidth={4}
+                    />
+                  </View>
+                </View>
+              </View>
             </View>
-  
-            
-            
-          </View>}
+          )}
   
         </View>
   
@@ -1007,8 +1070,7 @@ const home = () => {
 
       console.log("haha")
     })
-    
-
+  
     const {ismute} = useSelector(state => state.volume);
     
 
@@ -1028,7 +1090,7 @@ const home = () => {
           onEndReached={loadMorePosts}  // Triggered when the user scrolls to the bottom
           onEndReachedThreshold={2.7}  // How close to the end of the list before triggering onEndReached (50%)
           ListFooterComponent={renderFooter}
-          viewabilityConfig={{ viewAreaCoveragePercentThreshold: 100 }}
+          viewabilityConfig={{ viewAreaCoveragePercentThreshold: 55 }}
           onViewableItemsChanged={onViewableItems}
           
           refreshControl={
@@ -1038,26 +1100,24 @@ const home = () => {
             />
           }
           keyExtractor={(item) => item.id.toString()}
-          estimatedItemSize={200} // Provide an estimate for better performance
+          estimatedItemSize={450} // Provide an estimate for better performance
           renderItem={renderItem}
-        />
+           />
 
             
-             {
-              currentSelectedPost && <Comments
-              isVisible={isFullWidthModalVisible}
-              setIsFullWidthModalVisible={setIsFullWidthModalVisible}
-              onClose={handleModalClose}
-              post={currentSelectedPost}
-             
-            />
-            } 
+            {
+            currentSelectedPost && <Comments
+            isVisible={isFullWidthModalVisible}
+            setIsFullWidthModalVisible={setIsFullWidthModalVisible}
+            onClose={handleModalClose}
+            post={currentSelectedPost}
+            
+          />
+          } 
 
             {!topReached && (
               <FloatingButton isVisible={!topReached} onPress={scrollToTop} isHomePage={true} />
             )}
-
-
 
             <ImageView
               images={selectedImage}
@@ -1066,8 +1126,6 @@ const home = () => {
               onRequestClose={() => setimageViewerVisible(false)}
             /> 
               
-  
-
               {isBottomSheetOpen && <ReportBottomSheet bottomSheetRef={bottomSheetRef}
               initialSnapIndex={initialSnapIndex} 
               snapPoints={snapPoinst}
@@ -1084,6 +1142,11 @@ const home = () => {
               />}
 
 
+              {
+                seletedPost && <InteractingUsers isVisible={isLikersModalVisible} onClose={handleLikersModalClose} info={seletedPost}/>
+              }
+
+             
               {<CustomDialog onclose={onDialogClose}  isVisible={dialogDownLoad}>
 
                 {sharingUrls.length === 0 ? <View  style={{backgroundColor:colorScheme == 'dark' ? Colors.dark_gray : Colors.light_main ,padding:20, borderRadius:10,alignItems:'center'}} >
@@ -1110,16 +1173,8 @@ const home = () => {
 
                   </View>
                 }
-                
-                
               </CustomDialog>}
-                            
-
-  
-             
-  
-
-
+                          
         </SafeAreaView>
       
     </GestureHandlerRootView>
@@ -1199,7 +1254,88 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
-      }
+      },
+  uploadProgressContainer: {
+    marginTop: 20,
+    marginBottom: 20,
+    width: '80%',
+    
+    alignSelf: 'center'
+    
+  },
+  uploadProgressCard: {
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  uploadProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  uploadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  uploadPercentText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  uploadProgressContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  uploadThumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 16,
+  },
+  progressInfoContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressTextContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  uploadStatusText: {
+    fontSize: 14,
+  },
+  closeButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  thumbnailContainer: {
+    position: 'relative',
+  },
+  videoIndicator: {
+    position: 'absolute',
+    top: 5,
+    right: 21,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 

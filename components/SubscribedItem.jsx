@@ -68,6 +68,7 @@ const SubscribedItem = React.memo(({user:{username,profilephoto,name,mutual,id}}
 
 
             <TouchableOpacity onPress={handleProfilePress}>
+
               <Image
               resizeMode="cover"
               source={{uri:profilephoto}}
@@ -76,15 +77,18 @@ const SubscribedItem = React.memo(({user:{username,profilephoto,name,mutual,id}}
 
             </TouchableOpacity>
 
+            <TouchableOpacity style={{flex:1}} onPress={handleProfilePress}>
 
-            
-            <View style={{flex:1}}>
+              <View style={{flex:1}}>
 
-             <Text style={{fontSize:20,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,fontWeight:'bold'}}>{username}</Text>
+              <Text style={{fontSize:20,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,fontWeight:'bold'}}>{username}</Text>
 
-             <Text style={{fontSize:15,color:'gray'}}>{name}</Text>
+              <Text style={{fontSize:15,color:'gray'}}>{name}</Text>
 
-            </View>
+              </View>
+
+            </TouchableOpacity>
+           
 
 
             <TouchableOpacity style={{

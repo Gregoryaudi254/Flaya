@@ -158,6 +158,7 @@ export const AuthProvider = ({ children }) => {
         // User does not exist, create a new document
         await setDoc(userRef, {
           uid: user.uid,
+          version:5,
           signintype:'gmail',
           email: user.email,
           infoarray:[user.email],
@@ -210,8 +211,7 @@ export const AuthProvider = ({ children }) => {
         setUser(user);
 
         try{
-
-
+          // First check if we have cached profile info
           const userinfo = await getData('@profile_info');
 
           if (userinfo) {
@@ -219,70 +219,66 @@ export const AuthProvider = ({ children }) => {
             return;
           }
 
-
-          const userRef = doc(db, `users/${user.uid}`); // Reference to the user document
-          const userDoc = await getDoc(userRef); // Fetch the user document
+          // Get the user doc from Firestore
+          const userRef = doc(db, `users/${user.uid}`); 
+          const userDoc = await getDoc(userRef);
   
-      
-          if (userDoc.exists() && userDoc.data().username !== undefined) {
-            // User exists in the Firestore "users" collection
+          if (userDoc.exists()) {
+            // User exists in Firestore
             const userData = userDoc.data();
             console.log("User exists in Firestore:", userData);
-  
-            const userInfo = {
-              username:userData.username,
-              profilephoto:userData.profilephoto,
-              uid:userData.uid,
-            }
-  
-            await storeData('@profile_info',userInfo);
-  
-  
-            let settingsInfo = userData.settings;
-            settingsInfo = settingsInfo || {};
-  
-            const notification = settingsInfo.notification || {};
-           
-        
-            // add settings to storage
-            const settingsNotification = {
-              comments:notification.comments || false,
-              likes:notification.likes || false,
-              subscribers:notification.subscribers || false,
-              messages:notification.messages || false
-            }
-  
-            const settings = {}
-            settings.notification = settingsNotification;
-            settings.profileview = settingsInfo.profileview || 'everyone'
-            settings.onlinestatusarea = userData.isshowingonlinearea || false;
-  
-            console.log("existed signing in")
-
-            setisAuthenticated(true);
-  
-            await storeData('@settings',settings)
-  
             
+            // Check if the user has completed profile setup (has a username)
+            if (userData.username) {
+              // User has completed profile setup
+              const userInfo = {
+                username: userData.username,
+                profilephoto: userData.profilephoto,
+                uid: userData.uid,
+              };
+              
+              await storeData('@profile_info', userInfo);
+              
+              // Set up notification settings
+              let settingsInfo = userData.settings || {};
+              const notification = settingsInfo.notification || {};
+              
+              const settingsNotification = {
+                comments: notification.comments || false,
+                likes: notification.likes || false,
+                subscribers: notification.subscribers || false,
+                messages: notification.messages || false
+              };
+              
+              const settings = {
+                notification: settingsNotification,
+                profileview: settingsInfo.profileview || 'everyone',
+                onlinestatusarea: userData.isshowingonlinearea || false,
+              };
+              
+              await storeData('@settings', settings);
+              
+              setisAuthenticated(true);
+              console.log("User authenticated with completed profile");
+            } else {
+              // User exists but hasn't completed profile setup
+              console.log("User exists but profile not complete");
+              setisAuthenticated(false);
+            }
           } else {
             // User does not exist in Firestore
             console.log("User does not exist in Firestore");
-            // You may want to redirect to a page where the user sets their profile, etc.
             setisAuthenticated(false);
           }
-
-        }catch(e){
-          console.log("error "+e);
-          setisAuthenticated(false)
+        } catch(e) {
+          console.log("Error checking authentication:", e);
+          setisAuthenticated(false);
         }
-     
-      }else{
-        setUser(null)
-        setisAuthenticated(false)
+      } else {
+        // No user signed in
+        setUser(null);
+        setisAuthenticated(false);
       }
-
-     
-     
     });
 
     return () => unsubscribe();
@@ -339,6 +335,7 @@ export const AuthProvider = ({ children }) => {
 
         const userDetails = {
           uid: user.uid,
+          version:5,
           signintype:'email',
           email: email,
           infoarray:[email],

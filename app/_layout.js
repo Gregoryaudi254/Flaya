@@ -184,7 +184,17 @@ export default function RootLayout() {
           <Stack.Screen name="oppuserprofile" options={{ headerShown: false , animation:'slide_from_right'}} />
           <Stack.Screen name="chatglobal" options={{ headerShown: true,title:'', animation:'slide_from_right' }} />
           <Stack.Screen name="tagscomponent" options={{ headerShown: false }} />
-        
+
+          <Stack.Screen name="eventdetails" options={{ headerShown: true,title:'', animation:'slide_from_right' }} />
+          <Stack.Screen name="businessContact" options={{ headerShown: true,title:'', animation:'slide_from_right' }} />
+
+          <Stack.Screen name="events" options={{ headerShown: true,title:'', animation:'slide_from_right' }} />
+          <Stack.Screen name="businesses" options={{ headerShown: true,title:'', animation:'slide_from_right' }} />
+          <Stack.Screen name="search" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
+
+          <Stack.Screen name="subscriptionPage" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
+
+          <Stack.Screen name="textToImage" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
         </Stack>
           
         </ThemeProvider>

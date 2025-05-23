@@ -4,10 +4,10 @@ import React from "react";
 
 import { Colors } from "@/constants/Colors";
 
-const MemoizedDialog = React.memo(({ dialog, setDialog, blockinguserinfo , handleBlockUserConfirmation }) => (
+const MemoizedDialog = React.memo(({ dialog, setDialog, blockinguserinfo , handleBlockUserConfirmation, iscurrurentuser}) => (
     <Dialog onclose={() => setDialog(false)} isVisible={dialog}>
       <View style={{ padding: 10, backgroundColor: Colors.dark_gray, borderRadius: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+       { !iscurrurentuser && <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Image
             source={{ uri: blockinguserinfo.postcreatorimage || 'image' }}
             style={{
@@ -22,10 +22,10 @@ const MemoizedDialog = React.memo(({ dialog, setDialog, blockinguserinfo , handl
           <Text style={{ color: 'white', fontSize: 20, marginStart: 3 }}>
             {blockinguserinfo.postcreatorusername || 'user'}
           </Text>
-        </View>
+        </View>}
   
         <Text style={{ color: 'white', margin: 5, fontSize: 20, marginBottom: 15 }}>
-          Proceed to block user?
+         {iscurrurentuser ? 'Proceed to delete post?' : 'Proceed to block user?'}
         </Text>
   
         <View style={{ flexDirection: "row", alignContent: "space-between" }}>

@@ -8,6 +8,7 @@ import profileViewStatusReducer from '@/slices/profileViewSlice'
 import dataChangeReducer from '@/slices/dataChangeSlice'
 import locationReducer from '@/slices/locationSlice'
 import volumeReducer from '@/slices/volumeSlice'
+import textImageReducer from '@/slices/textImageSlice'
 
 export const store = configureStore({
 
@@ -20,7 +21,8 @@ export const store = configureStore({
     profile:profileViewStatusReducer,
     data:dataChangeReducer,
     location:locationReducer,
-    volume:volumeReducer
+    volume:volumeReducer,
+    textImage:textImageReducer
   },
   
 });

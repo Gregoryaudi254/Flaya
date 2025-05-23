@@ -31,6 +31,8 @@ export default function RootLayout() {
            <Stack.Screen name="policy" options={{ title: 'Privacy policy '}} />
            <Stack.Screen name="intellectual" options={{ title: 'Intellectual Property Policy'}} />
            <Stack.Screen name="terms" options={{ title: 'Terms of Service'}} />
+           <Stack.Screen name="businessAccount" options={{ title: 'Business Account'}} />
+          
 
 
 

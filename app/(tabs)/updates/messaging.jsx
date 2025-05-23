@@ -249,7 +249,6 @@ const messaging = () => {
 
   
   const getUsersOnlineNearby = useCallback(async () => {
-
     let settings = await getData('@settings');
     const userInfo = await getData('@profile_info');
     setProfileInfo(userInfo);
@@ -304,42 +303,31 @@ const messaging = () => {
 
 
   const setOnlineAreaStatus = useCallback(async (status) => {
-
     const userInfo = await getData('@profile_info');
     const ref = doc(db,`users/${userInfo.uid}`);
-
     await updateDoc(ref,{isshowingonlinearea:status, isshowingdistance:showDistance});
-
   },[showDistance])
    
 
 
   const handleBottomPress = useCallback( async () =>{
-
     let settings = await getData('@settings');
     
-
     if (!settings) {
       settings = {} 
     }
-
     bottomSheetRef.current?.close();
 
-  
     if (showFlatList) {
       settings.onlinestatusarea = false;
     }else {
       settings.onlinestatusarea = true;
     }
-
-   
     await storeData('@settings', settings);
-
     getUsersOnlineNearby();
-
     setOnlineAreaStatus(settings.onlinestatusarea);
 
-  },[showFlatList])
+  },[showFlatList]);
   
 
   const handleOnActiveUserPress = useCallback((item) => {
@@ -358,9 +346,7 @@ const messaging = () => {
 
   const renderItem = useCallback(
     ({ item }) => (
-
       <ActiveUsersItem activeUser={item} currentuserlocation={location} onPress={handleOnActiveUserPress}/>
-     
     ),[location]
   );
 

@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return get(/databases/$(database)/documents/admin/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Users collection - each user can read/write their own document
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+      allow delete: if isAuthenticated() && isOwner(userId);
+      
+      // Subscription data is accessible by the user
+      match /subscription/{document=**} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      // User's posts collection
+      match /posts/{postId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isOwner(userId);
+        allow update, delete: if isAuthenticated() && isOwner(userId);
+        
+        // Likes, comments, and other subcollections
+        match /{document=**} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated();
+        }
+      }
+      
+      // User's notifications collection
+      match /notifications/{notificationId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      // Other user subcollections
+      match /{allSubcollections=**} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // Businesses collection
+    match /businesses/{businessId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        (resource == null || 
+          (resource.data.ownerid == request.auth.uid || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isbusinessaccount == true));
+    }
+    
+    // Business processing collection (for approvals)
+    match /businessprocessing/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Admin-only collections
+    match /admin/{document=**} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+    
+    // Reports collection (admin access)
+    match /reports/{document=**} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+    
+    // Other collections
+    match /{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+  }
+} 

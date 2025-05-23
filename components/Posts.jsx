@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View, Image, ImageBackground, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ResizeMode, Video } from 'expo-av';
+import Events from './Events';
+import Businesses from '@/components/Businesses';
 
 const { width: screenWidth, height } = Dimensions.get('window');
 import { ImageSlider } from "react-native-image-slider-banner";
@@ -24,14 +26,34 @@ import { httpsCallable } from 'firebase/functions';
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { setVolume } from '@/slices/volumeSlice';
+import { timeAgoPost } from '@/constants/timeAgoPost';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
-const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post, activePost, onCommentPress, handlePlayPress, onImagePress, onReportPress, userinfo, handleRemovePost, handleBlockUser, handleSharePostPress }) => {
+const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post, activePost, onCommentPress, handlePlayPress, onImagePress, onReportPress, userinfo, handleRemovePost, handleBlockUser, handleSharePostPress, handleLikersPress }) => {
   const videoRef = useRef(null);
   const colorScheme = useColorScheme();
   const router = useRouter();
   const dispatch = useDispatch();
   const lastItemId = useRef(post.id);
   const userInteracted = useRef(false);
+  const dimensionsCalculated = useRef(false);
+
+  // Add state for media dimensions with a key tied to the post ID to handle recycling
+  const [mediaDimensions, setMediaDimensions] = useState({
+    width: screenWidth,
+    height: 350,
+    aspectRatio: null,
+    postId: post.id // Track which post these dimensions belong to
+  });
+
+  // Reset dimensions when post changes due to view recycling
+  useEffect(() => {
+    if (mediaDimensions.postId !== post.id) {
+    
+    }
+  }, [post.id]);
+
+ 
 
   // Memoized formatString function
   const getFormatedString = useMemo(() => (number) => {
@@ -183,36 +205,31 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
       videoRef.current.pauseAsync();
     }
   }, [post]);
+  
+
+  const handlePressLikers = useCallback((onpress) => {
+    onpress(post)
+  },[post])
 
   useEffect(() => {
-    console.log("triggered")
     if (videoRef.current) {
-      console.log("here")
       if (activePost === post.id) {
         try {
-          console.log("Play video")
-         // videoRef.current.playAsync();
+          // videoRef.current.playAsync();
         } catch (e) {
           console.log(e);
         }
       } else {
-       
         try {
-
           videoRef.current.pauseAsync();
           updateState({ isVideoPlaying: false });
           videoRef.current.setPositionAsync(0);
 
           const unloadVideo = async () => {
             await videoRef.current.unloadAsync();
-            console.log("unloaded")
           }
 
-          console.log("stopping video")
-
           unloadVideo();
-          
-          
         } catch (e) {
           console.log(e);
         }
@@ -231,36 +248,20 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
   const { ismute } = useSelector(state => state.volume);
 
   const handlePlaybackStatusUpdate = useCallback((status) => {
-
     if (status?.isPlaying) {
       updateState({ isBuffering: false })
     }
 
-    // if (status.positionMillis > 0) {
-    //   setBuffering(status.isBuffering)
-    // }
-
     if(status.didJustFinish){
-
-  
       if (videoRef.current) {
         videoRef.current.setPositionAsync(0);
       }
-
     }
 
     updateState({ isVideoPlaying: status.isPlaying });
-
   }, []);
 
-  
-
   const userlocation = userinfo?.coordinates;
-
-  
-
-  //console.log(JSON.stringify(post))
-
 
   const [distanceString , setDistanceString] = useState(null);
 
@@ -268,8 +269,9 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
 
   const setLocation = useCallback((coordinates) => {
 
-    try{
+    if (!post.coordinates) return;
 
+    try{
       const usergeopoint = { latitude: coordinates.latitude, longitude: coordinates.longitude };
       const postgeopoint = { latitude: post.coordinates._latitude, longitude: post.coordinates._longitude };
       const distance = getDistance(usergeopoint,postgeopoint);
@@ -279,9 +281,8 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
       : `${(distance / 1000).toFixed(1)} km`;
   
       setDistanceString(distanceString)
-
     }catch(e){console.log(e)}
-    });
+  });
 
   useEffect(() => {
     try{
@@ -290,20 +291,14 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
       }else if (userlocation){
         setLocation(userlocation)
       }
-
     }catch(e){
       console.log("crashed ",e)
     }
-
-    
   }, [coordinates,post.id])
-
-  
 
   const [isShared,setShared] = useState(false);
 
   const onRepostSelect = useCallback(async()=>{
-
     let sharedposts = await getData('@shared_posts')
 
     if (!sharedposts) {
@@ -311,21 +306,15 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
     }
  
     if (!sharedposts.includes(post.id)) {
-
-      
       setSharesMap((prev) => ({
         ...prev,
         [post.id]: (post.shares || 0) + 1, // Increment likes
       }));
 
-      // Optimistically update the share state in the UI
-  
-
       updateState({
         isShared: true,
         shares: (post.shares || 0) + 1
       });
-
     
       // Update the interaction in Firestore
       await updateInteranctions("shares");
@@ -335,37 +324,25 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
 
       // Store the new share posts array
       await storeData('@shared_posts', updatedSharedPosts);
-
-      // Optionally, if you have a setter for sharedposts, update the state in the app
-      // setsharePosts(updatedsharePosts);
     }
-    
   },[post]);
 
-
   const handleReport = useCallback(() => {
-
     const postInfo = {
       postcreatorid:post.user,
       postid:post.id,
-
     }
     onReportPress(postInfo)
-
   });
 
-
   const handlePostPress = () =>{
-
     const updatedPost = {...post,userinfo:userinfo, likes:state.likes,shares:state.shares}
     router.push({
       pathname: '/postpage',
       params: { data: encodeURIComponent(JSON.stringify(updatedPost)) }
     });
-   
   }
 
-  
   useEffect(() => {
     checkInteractions();
   },[])
@@ -381,7 +358,6 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
     onImagePress(uri);
   }, [onImagePress]);
 
-
   const handlePressShare = useCallback(async () => {
     let content;
     if (post.contentType === 'video'){
@@ -392,38 +368,57 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
     handleSharePostPress(content, post.contentType, post.user, post.id)
   },[post]);
 
+
+  const onEventPress = useCallback((event) => {
+    router.push({
+      pathname: '/eventdetails',
+      params: { 
+        id: event.id,
+        data: encodeURIComponent(JSON.stringify(event))
+      }
+    });
+  });
+
+  // Business categories with icons
+  const categories = useMemo(() => [
+    { id: 'all', name: 'All', icon: 'apps-outline' },
+    { id: 'food', name: 'Food', icon: 'restaurant-outline' },
+    { id: 'fashion', name: 'Fashion', icon: 'shirt-outline' },
+    { id: 'groceries', name: 'Groceries', icon: 'cart-outline' },
+    { id: 'services', name: 'Services', icon: 'construct-outline' },
+    { id: 'health', name: 'Health', icon: 'fitness-outline' },
+    { id: 'beauty', name: 'Beauty', icon: 'cut-outline' },
+    { id: 'electronics', name: 'Electronics', icon: 'hardware-chip-outline' },
+    { id: 'home accesories', name: 'Home Accesories', icon: 'bed-outline' },
+    { id: 'drinks & beverages', name: 'Drinks & Beverages', icon: 'wine-outline' },
+    { id: 'entertainment', name: 'Entertainment', icon: 'musical-notes-outline' },
+    { id: 'other', name: 'Other', icon: 'ellipsis-horizontal-outline' }
+  ], []);
+
+  const getCategoryIcon = (categoryName) => {
+    const category = categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
+    return category ? category.icon : 'storefront-outline'; // Default icon if not found
+  };
   
-
-
-  
-  
-
-
   
   return (
     <View style={styles.mainView}>
-      <View style={styles.headerView}>
+
+      {
+       ( post.contentType !== 'event' && post.contentType !== 'business') && <View style={styles.headerView}>
         <View style={styles.profileView}>
-
           <TouchableOpacity onPress={handleProfilePress}>
-
             <Image
               source={{ uri: post.profileImage }}
               style={styles.profileImage}
             />
-
           </TouchableOpacity>
 
-          
-
           <View style={styles.textView}>
-
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-
               <View style={{flex:1, flexDirection:'row',alignItems:'center'}}>
-
                 <TouchableOpacity onPress={handlePostPress}>
-                <Text style={[styles.username, {color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>{post.username}</Text>
+                <Text style={[styles.username, {color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>{post.business ? post.business.name : post.username}</Text>
                 </TouchableOpacity>
 
                 {post.verified && <Image
@@ -436,8 +431,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                   }}
                 />}
 
-                <Text style={{fontSize:15, color:'gray', marginStart:5}}>{timeAgo(post.createdAt)}</Text>
-
+                
 
                 <TouchableOpacity onPress={handlePressShare}>
                   <Image
@@ -447,20 +441,10 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                       />
                 </TouchableOpacity>
 
-                
-
-                 <Text style={{fontSize:15, color:'gray', marginStart:3}}>{getFormatedString(post.sharings || 0)}</Text>  
-
-                 
-
-
-
-                
-
+                <Text style={{fontSize:15, color:'gray', marginStart:3}}>{getFormatedString(post.sharings || 0)}</Text>  
               </View>
 
               {post.isshowinglocation && <Image style={{height:25,width:25}} source={require('@/assets/icons/pinview.png')}/>}
-
               
               <Menu renderer={Popover} >
                 <MenuTrigger >
@@ -470,97 +454,141 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                       style={[styles.menuIcon, {tintColor:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}
                     />
                 </MenuTrigger>
-                <MenuOptions >
-
-                 <MenuOption  onSelect={() => 
-                  handleBlockUser({postcreatorid:post.user, postcreatorimage:post.profileImage,postcreatorusername:post.username})} 
-                  text='Block user' />
-                  <MenuOption onSelect={() => handleRemovePost(post.id)} text='Remove post' />
+                <MenuOptions customStyles={{
+                  optionsContainer: {
+                    borderRadius: 12,
+                    padding: 8,
+                    width: 200,
+                    backgroundColor: colorScheme === 'dark' ? '#2A2A2A' : '#FFFFFF',
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 5,
+                    elevation: 6
+                  }
+                }}>
+                 <MenuOption onSelect={() => 
+                  handleBlockUser({postcreatorid:post.user, postcreatorimage:post.profileImage,postcreatorusername:post.username})}>
+                   <View style={styles.menuItemContainer}>
+                     <Ionicons name="person-remove-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
+                     <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Block user</Text>
+                   </View>
+                 </MenuOption>
+                  
+                  <MenuOption onSelect={() => handleRemovePost(post.id)}>
+                    <View style={styles.menuItemContainer}>
+                      <Ionicons name="eye-off-outline" size={20} color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} />
+                      <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>Remove post</Text>
+                    </View>
+                  </MenuOption>
 
                   <MenuOption onSelect={handleReport}>
-                    <View style={{flexDirection:'row'}}>
-
-                      <Image
-                        resizeMode="contain"
-                        source={require('@/assets/icons/block.png')}
-                        style={{tintColor:'red',height:20,width:20}}
-                      />
-
-                      <Text style={{color:'red'}}>Report post</Text>
-
+                    <View style={styles.menuItemContainer}>
+                      <Ionicons name="flag-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
+                      <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Report post</Text>
                     </View>
-                     
                   </MenuOption>
-                 
                 </MenuOptions>
               </Menu>
-
-              
             </View>
-            {post.description && <TouchableOpacity onPress={handlePostPress}>
 
-              <Text numberOfLines={3} style={styles.description}>{post.description}</Text>
+            <View style={{flexDirection:'row'}}>
 
-            </TouchableOpacity> }
+              <TouchableOpacity onPress={handlePostPress}>
+                <Text style={{fontSize:15, color:'gray', marginStart:5}}>{timeAgoPost(post.createdAt)}</Text>
+              </TouchableOpacity>
+
+             { post.business && <View
+                  style={[
+                    styles.categoryButton,
+                    { marginStart:10,
+                      marginTop:5,
+                      backgroundColor: 
+                        colorScheme === 'dark' ? '#333333' : '#F0F0F0',
+                      borderWidth:  1,
+                      borderColor: 'rgba(150,150,150,0.3)'
+                    }
+                  ]}
+                 
+                >
+                  <Ionicons 
+                    name={getCategoryIcon(post.business.category)} 
+                    size={16} 
+                    color={colorScheme === 'dark' ? '#DDDDDD' : '#666666'} 
+                  />
+                  <Text 
+                    style={[
+                      styles.categoryText, 
+                      { 
+                        color: colorScheme === 'dark' ? '#DDDDDD' : '#666666',
+                        marginLeft: 5
+                      }
+                    ]}
+                  >
+                    {post.business.category}
+                  </Text>
+                </View>}
+
+            </View>
+
+           
+
           </View>
         </View>
       </View>
+      }
 
-      <View style={{ height: 250, width: '100%', marginTop: 10 }}>
+      {post.description && <TouchableOpacity onPress={handlePostPress}>
+              <Text numberOfLines={3} style={[styles.description, {color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}]}>{post.description}</Text>
+            </TouchableOpacity> }
+      
+
+      <View style={{ height: (post.contentType !== 'event' && post.contentType !== 'business') ? mediaDimensions.height : 280, width: '100%', marginTop: 10 }}>
         {post.contentType === 'image'  ? post.content.length < 2 ? (
           <TouchableWithoutFeedback onPress={()=>onImagePress(post.content[0])}>
-
             <ImageBackground
               source={{ uri: post.content[0] }}
-              style={{ width: '100%', height: 250, borderRadius: 10, overflow: 'hidden' }}
+              style={{ width: '100%', height: mediaDimensions.height, borderRadius: 10, overflow: 'hidden' }}
+            
             />
-
           </TouchableWithoutFeedback>
          
         ):
-        ( <View style={{borderRadius:10}}>
-
+        ( <View style={{borderRadius:10, height: mediaDimensions.height}}>
             <ImageSlider 
-
-            caroselImageContainerStyle={{height:250,overflow:'hidden',width:screenWidth-100,borderRadius:10}}
-            caroselImageStyle={{resizeMode:'cover',height:250,overflow:'hidden',width:screenWidth,marginHorizontal:5,borderRadius:10}}
+            caroselImageContainerStyle={{ height: mediaDimensions.height, overflow:'hidden', width:screenWidth-100, borderRadius:10 }}
+            caroselImageStyle={{ resizeMode:'cover', height: mediaDimensions.height, overflow:'hidden', width:screenWidth, marginHorizontal:5, borderRadius:10 }}
             data={post.content.map((image) => ({ img: image }))}
             autoPlay={false}
-
             closeIconColor="#fff"
+          
             />
-
         </View>
          
         )
-         : (
+         :  post.contentType === "video" ? ( 
           <View style={{marginHorizontal:1}}>
-             
             <TouchableOpacity
               onPress={handleOnPlay}
               style={{
-                width: "100%", height: 250
+                width: "100%", height: mediaDimensions.height
               }}
               >
-
-              <View >
-
+              <View>
                 <Video 
-                source={{ uri: post.content }}
-                shouldPlay={false}
-                ref={videoRef}
-                style={{ width: "100%", height: 250, borderRadius: 10 }}
-                resizeMode={ResizeMode.COVER}
-                useNativeControls={false}
-                usePoster={true}
-                posterStyle={{ borderRadius: 10, overflow: 'hidden', resizeMode: 'cover' }}
-                posterSource={{ uri: post.thumbnail }}
-                onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-              />
+                  source={{ uri: post.content }}
+                  shouldPlay={false}
+                  ref={videoRef}
+                  style={{ width: "100%", height: mediaDimensions.height, borderRadius: 10 }}
+                  resizeMode={ResizeMode.COVER}
+                  useNativeControls={false}
+                  usePoster={true}
+                  posterStyle={{ borderRadius: 10, overflow: 'hidden', resizeMode: 'cover' }}
+                  posterSource={{ uri: post.thumbnail }}
+                  onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
 
+                />
               </View>
-
-            
 
               <Image
                 style={{ width: 20, height: 20 ,position: 'absolute',
@@ -570,97 +598,164 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                   marginTop: -10}}
                 source={require('@/assets/icons/play.png')}
               />
-
-              
-
-              
-              
             </TouchableOpacity>
-
             {state.isBuffering && <ActivityIndicator style={{ alignSelf: 'center',
              marginTop: -10, top: '50%',  position:"absolute" }} size='large' color="white"  />}
-
+          </View>
+        ) : post.contentType === "event" ? (
+          <View style={{borderRadius: 10, overflow: 'hidden'}}>
+            <Events 
+              events={post.events || []} 
+              onEventPress={onEventPress}
+            />
+          </View>
+        ) : post.contentType === "business" ? (
+          <View style={{borderRadius: 10, overflow: 'hidden'}}>
+            <Businesses 
+              businesses={post.businesses || []} 
+              onBusinessPress={(business) => {
+                router.push({
+                  pathname: '/oppuserprofile',
+                  params: { 
+                    uid: business.ownerid, 
+                  }
+                });
+              }}
+            />
+          </View>
+        ) : (
+          <View style={{padding: 10, alignItems: 'center', justifyContent: 'center', height: 100}}>
+            <Text style={{color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}>
+              Unsupported content type
+            </Text>
           </View>
         )}
-
       </View>
 
-      <View style={styles.bottomIcons}>
-        <View style={styles.bottomIconsView}>
-          <TouchableOpacity onPress={handleOnLiked}>
-            <Image
-              resizeMode="contain"
-              source={!state.isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
-              style={[styles.menuIcon, !state.isLiked && {tintColor:'gray'}, {width:25,height:25}]}
-            />
-          </TouchableOpacity>
-          <Text style={styles.bottomIconsText}>{getFormatedString(state.likes)}</Text>
-        </View>
 
-        <View style={styles.bottomIconsView}>
 
-           <Menu renderer={Popover} >
-                <MenuTrigger >
+     { (post.peopleliked && post.peopleliked?.length > 2) &&
+
+       <TouchableOpacity onPress={()=>handlePressLikers(handleLikersPress)}>
+
+        <View style={styles.peopleLikedContainer}>
+        {post.peopleliked?.slice(0, 4).map((liker, index) => (
+          <Image 
+            key={liker.id || index}
+                source={{ uri: liker.profileImage }}
+                style={[styles.peopleLikedImage, { marginLeft: index > 0 ? -15 : 0 }]} 
+              />
+            ))}
+
+            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}> Liked by </Text>
+
+            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,fontWeight:'bold' }}>{post.peopleliked[0].name || "Linda"}</Text>
+
+            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}> and </Text>
+
+            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,fontWeight:'bold' }}>{"Others"}</Text>
+          </View>
+
+       </TouchableOpacity>
+       
+     }
+
+
+      {
+        (post.contentType !== 'event' && post.contentType !== 'business') && <View style={styles.bottomIcons}>
+
+          <View style={{flexDirection:'row'}}>
+
+            <View style={[styles.bottomIconsView, {marginStart:3}, state.isLiked && {backgroundColor:'rgba(222, 61, 80, 0.1)',borderWidth:0}]}>
+              <TouchableOpacity onPress={handleOnLiked}>
                 <Image
+                  resizeMode="contain"
+                  source={!state.isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
+                  style={[styles.menuIcon, !state.isLiked && {tintColor:'gray', marginRight:3}, {width:25,height:25, marginRight:5}]}
+                />
+              </TouchableOpacity>
+              <Text style={styles.bottomIconsText}>{getFormatedString(state.likes)}</Text>
+            </View>
+            
+
+            <View style={[styles.bottomIconsView, state.isShared && {backgroundColor:'rgba(234, 93, 22, 0.2)',borderWidth:0}]}>
+            <Menu renderer={Popover}>
+                  <MenuTrigger>
+                    <Image
                       resizeMode="contain"
                       source={require('@/assets/images/refresh.png')}
-                      style={[styles.menuIcon,  !state.isShared && {tintColor:'gray'}, state.isShared && {tintColor:'tomato'}]}
+                      style={[
+                        styles.actionIcon, 
+                        !state.isShared && {tintColor: 'gray'}, 
+                        state.isShared && {tintColor: 'tomato'}
+                      ]}
                     />
-                </MenuTrigger>
-                <MenuOptions >
+                  </MenuTrigger>
+                  <MenuOptions customStyles={{
+                    optionsContainer: {
+                      borderRadius: 12,
+                      padding: 4,
+                      backgroundColor: colorScheme === 'dark' ? '#2A2A2A' : '#FFFFFF',
+                      borderWidth: colorScheme === 'dark' ? 1 : 0.5,
+                      borderColor: colorScheme === 'dark' ? '#444444' : '#DDDDDD',
+                    }
+                  }}>
+                    <MenuOption onSelect={onRepostSelect}>
+                      <View style={styles.menuOptionItem}>
+                        <Image
+                          resizeMode="contain"
+                          source={require('@/assets/images/refresh.png')}
+                          style={{height: 20, width: 20, marginRight: 8}}
+                        />
+                        <Text style={styles.menuOptionText}>Repost</Text>
+                      </View>
+                    </MenuOption>
+                    <MenuOption>
+                      <View style={styles.cancelOption}>
+                        <Text style={{color: '#FF3B30'}}>Cancel</Text>
+                      </View>
+                    </MenuOption>
+                  </MenuOptions>
+                </Menu>
+                <Text style={[
+                  styles.bottomIconsText,
+                  isShared && {color: 'tomato', fontWeight: '500'}
+                ]}>
+                  {getFormatedString(state.shares)}
+                </Text>
+           </View>
+            
 
-              
-                  <MenuOption onSelect={onRepostSelect}>
-                    <View style={{flexDirection:'row',marginHorizontal:10}}>
-
-                      <Image
-                        resizeMode="contain"
-                        source={require('@/assets/images/refresh.png')}
-                        style={{tintColor:'black',height:20,width:20}}
-                      />
-
-                      <Text style={{color:'black'}}>Repost</Text>
-
-                    </View>
-                     
-                  </MenuOption>
-
-                  <MenuOption>
-                    <View style={{alignItems:'center'}}>
-
-                      <Text style={{color:'red'}}>Cancel</Text>
-
-                    </View>
-                     
-                  </MenuOption>
-                 
-                 
-                </MenuOptions>
-            </Menu>
-          
-          <Text style={styles.bottomIconsText}>{getFormatedString(state.shares)}</Text>
-        </View>
 
         <View style={styles.bottomIconsView}>
           <TouchableOpacity onPress={() => handleIconPress(onCommentPress)}>
             <Image
               resizeMode="contain"
               source={require('@/assets/images/chat.png')}
-              style={[styles.menuIcon, {tintColor:'gray',width:27,height:27}]}
+              style={[styles.menuIcon, {tintColor:'gray',width:27,height:27, marginRight:3}]}
             />
           </TouchableOpacity>
           <Text style={[styles.bottomIconsText]}>{post.comments || 0}</Text>
         </View>
 
-        {distanceString && <View style={styles.bottomIconsView}>
+
+          </View>
+        
+
+       
+        {distanceString && <View style={{flexDirection: 'row',
+        alignItems: 'center',}}>
           <Image
             resizeMode="contain"
             source={require('@/assets/icons/location_small.png')}
-            style={[styles.menuIcon, {tintColor:'gray',width:35,height:35}]}
+            style={[styles.menuIcon, {tintColor:'gray',width:35,height:35, marginRight:3}]}
           />
           <Text style={styles.bottomIconsText}>{distanceString}</Text>
         </View>}
       </View>
+      }
+
+      
     </View>
   );
 }) 
@@ -722,13 +817,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   description: {
-    color: 'gray',
-    fontSize: 14,
+   
+    marginTop:10,
+    fontSize: 15,
   },
   menuIcon: {
     width: 30,
     height: 30,
-    marginRight: 5,
+    
   },
   thumbnail: {
     width: '100%',
@@ -748,10 +844,72 @@ const styles = StyleSheet.create({
   bottomIconsText: {
     color: 'gray',
     fontSize: 15,
-   
   },
   bottomIconsView: {
     flexDirection: 'row',
     alignItems: 'center',
-  }
+    marginStart:15,
+    borderRadius:20,
+    borderWidth:0.8,
+    borderColor:"gray",
+    padding:10
+   
+  },
+  categoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    height: 40,
+    borderRadius: 20,
+    marginHorizontal: 5,
+  },
+  categoryText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  peopleLikedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop:8
+  },
+  peopleLikedImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  menuItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  menuItemText: {
+    fontSize: 16,
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionIcon: {
+    width: 30,
+    height: 30,
+    paddingRight: 25,
+  },
+  menuOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  menuOptionText: {
+    color: 'black',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  cancelOption: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

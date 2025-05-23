@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View,FlatList,TouchableOpacity ,Image,Dimensions, ActivityIndicator, RefreshControl} from 'react-native'
+import { StyleSheet, Text, View,FlatList,TouchableOpacity ,Image,Dimensions, Platform, Linking, ActivityIndicator, RefreshControl} from 'react-native'
 import React,{useCallback, useEffect, useMemo,useRef, useState} from 'react'
 
 import { Data } from '@/constants/Data'
@@ -24,6 +24,7 @@ import { useSelector } from 'react-redux';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import MemoizedBottomSheetUser from '@/components/MemoizedBottomSheetUser';
 import ReportBottomSheet from '@/components/ReportBottomSheet';
+import OrderBookingBottomSheet from '@/components/OrderBookingBottomSheet';
 
 const userprofile = () => {
 
@@ -133,8 +134,6 @@ const userprofile = () => {
       console.log("getting subscribed "+snap.exists())
 
       setsubscribed(snap.exists());
-
-
     }
 
     useEffect(() => {
@@ -310,154 +309,262 @@ const userprofile = () => {
         
       }
     }, [isBottomSheetOpen]);
+
+    const orderBottomSheetRef = useRef(null);
+
+    // Add new function to handle order/book button press
+    const handleOrderBookPress = () => {
+      if (userInfo && userInfo.isbusinessaccount) {
+        orderBottomSheetRef.current?.snapToIndex(0);
+      }
+    };
     
 
     const listHeaderComponent = useMemo(
-        () => (
-          <View style={{ flexDirection: 'column', marginBottom: 10 ,flex:1}}>
+      () => (
+        <View style={{ flexDirection: 'column', marginBottom: 10 ,flex:1}}>
 
 
-            <View style={{flex:1,flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginStart:10}}>
+          <View style={{flex:1,flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginStart:10}}>
 
-                  <TouchableOpacity onPress={handleCLOSE} >
-                   <Image style={{width:20,height:20,tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}} source={require('@/assets/icons/arrow.png')}></Image>
+                <TouchableOpacity onPress={handleCLOSE} >
+                 <Image style={{width:20,height:20,tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}} source={require('@/assets/icons/arrow.png')}></Image>
+                </TouchableOpacity>
+
+                <View style={{flexDirection:'row',alignItems:"center"}}>
+
+                  <TouchableOpacity onPress={handleMoveTags} >
+                    <Image style={{width:30,height:30,tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,marginEnd:10}} source={require('@/assets/icons/user_tag.png')}></Image>
                   </TouchableOpacity>
 
-                   <View style={{flexDirection:'row',alignItems:"center"}}>
-                  
-                        <TouchableOpacity onPress={handleMoveTags} >
-                          <Image style={{width:30,height:30,tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,marginEnd:10}} source={require('@/assets/icons/user_tag.png')}></Image>
-                        </TouchableOpacity>
-    
-                        {(!isblocked && !isaccountprivate && !isoppuserblockedcurrentUser) && <TouchableOpacity style={{alignSelf:'flex-end',marginBottom:20,marginTop:20}} onPress={handleMenuPress} >
-                              <Image
-                                  resizeMode="contain"
-                                  source={require('@/assets/icons/menu.png')}
-                                  style={{height:30,marginEnd:30, tintColor:'gray'}}
-                                  
-                                  />
-                          </TouchableOpacity>}
-    
-                    </View>
-
-
-            </View>
-            
-
-          
-
-
-            <View style={{flexDirection:'row',width:'100%',justifyContent:'space-evenly'}}>
-
-                <Image source={{uri: userInfo != null ? userInfo.profilephoto : defaultProfileImage}} 
-                style={{width:100,height:100,borderColor:'white',borderWidth:3,borderRadius:50,marginEnd:10,marginStart:20}} />
-
-
-                <View style={{flex:1}}>
-
-                    <View  style={{flex:1,flexDirection:'row',justifyContent:'space-evenly'}}>
-
-                        <View style={{}}>
-
-                        <Text style={{fontSize:20,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}>{userInfo ? userInfo.radius : ""} m</Text>
-
-                        <Text style={{fontSize:15,color:'gray'}}>Distance</Text>
-
-                        </View>
-
-                        <View style={{}}>
-
-                        <Text style={{fontSize:20,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}>{userInfo ? getFormatedString(userInfo.likes) : 0}</Text>
-
-                        <Text style={{fontSize:15,color:'gray'}}>Likes</Text>
-
-                        </View>
-
-                    </View>
-
-
-                    {(isblocked !== null && !isblocked && !isaccountprivate && !isoppuserblockedcurrentUser) ?<View style={{flexDirection:'row',justifyContent:'space-evenly', marginHorizontal:30}}>
-
-                      {issubscribed !== null && <TouchableOpacity style={{
-                          backgroundColor:issubscribed ? Colors.dark_gray : Colors.blue, // Background color
-                          padding: 5,                // Padding around the text
-                          borderRadius: 5,
-                          
-                          height:40
-                              // Rounded corners
-                      }} onPress={handleSuPbscribePress}>
-                          <Text style={styles.buttonText}>{issubscribed ? "subscribed" : "subscribe"}</Text>
-                      </TouchableOpacity>}
-
-                        <TouchableOpacity style={{
-                            backgroundColor:'gray', // Background color
-                            padding: 5,    
-                            paddingHorizontal:20,
-                            flexDirection:'row' ,           // Padding around the text
-                            borderRadius: 5,
+                  {(!isblocked && !isaccountprivate && !isoppuserblockedcurrentUser) && <TouchableOpacity style={{alignSelf:'flex-end',marginBottom:20,marginTop:20}} onPress={handleMenuPress} >
+                        <Image
+                            resizeMode="contain"
+                            source={require('@/assets/icons/menu.png')}
+                            style={{height:30,marginEnd:30, tintColor:'gray'}}
                             
-                            height:40
-                                // Rounded corners
-                        }} onPress={goToMessaging}>
-                            <Image source={require('@/assets/icons/sendM.png')} style={{width:20,height:20,tintColor:'white',alignSelf:'center'}}/>
-                        </TouchableOpacity>
-
-
-                    </View> : <TouchableOpacity   onPress={handleUnblockUser}>
-
-                          <View style={{
-                            backgroundColor:Colors.dark_gray,
-                            padding: 5,    
-                            alignSelf:'center' ,           // Padding around the text
-                            borderRadius: 5,
-                            marginTop:10,
-                            width:150,
-                            flexDirection:'row',
-                            alignItems:'center'
-                                // Rounded corners
-                            }} >
-
-                            <Image style={{tintColor:"red", width:20, height:20}} source={require('@/assets/icons/blocked.png')} />
-
-                            <Text style={styles.buttonText}>{isaccountprivate ? 'This account is private' :isblocked ? 'Unblock user': 'account restricted'}</Text>
-
-                          </View>
-
-                          
-                      </TouchableOpacity> }
-
-
-
-                    
-
-            
+                            />
+                    </TouchableOpacity>}
 
                 </View>
 
                 
 
-            </View>
-
-            <View style={{flexDirection:"row",alignItems:"center",marginTop:10}}> 
-
-
-            <Text style={{fontSize:20,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,marginLeft:20}}>{userInfo ? userInfo.username : ""}</Text>
-
-            {(userInfo && userInfo.verified )&& <Image
-                                resizeMode="contain"
-                                source={require('@/assets/icons/verified.png')}
-                                style={{height:25, width:25}}
-                              />}
-
-            </View>
-
-            
-
-
-            {(userInfo !== null && userInfo.caption) && <Text style={{fontSize:15,color:'gray',marginLeft:20,marginBottom:10}}>{userInfo.caption}</Text>}
           </View>
-        ),[userInfo,issubscribed,isblocked]
-      );
+          
+
+        
+
+
+          <View style={{flexDirection:'row',width:'100%',justifyContent:'space-evenly'}}>
+
+              {userInfo !== null && <Image source={{uri:userInfo.profilephoto}} 
+              style={{width:100,height:100,borderColor:'white',borderWidth:3,borderRadius:50,marginEnd:10,marginStart:20}} />}
+
+
+              <View style={{flex:1}}>
+
+                  <View  style={{flex:1,flexDirection:'row',justifyContent:'space-evenly'}}>
+
+                      <View style={{}}>
+
+                      <Text style={{fontSize:20,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}>{userInfo ? userInfo.radius : ""} m</Text>
+
+                      <Text style={{fontSize:15,color:'gray'}}>Distance</Text>
+
+                      </View>
+
+                      <View style={{}}>
+
+                      <Text style={{fontSize:20,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}>{userInfo ? getFormatedString(userInfo.likes) : 0}</Text>
+
+                      <Text style={{fontSize:15,color:'gray'}}>Likes</Text>
+
+                      </View>
+
+                  </View>
+
+
+                  {(isblocked !== null && !isblocked && !isaccountprivate && !isoppuserblockedcurrentUser) ?<View style={{flexDirection:'row',justifyContent:'space-evenly', marginHorizontal:30}}>
+
+                    {issubscribed !== null && <TouchableOpacity style={{
+                        backgroundColor:issubscribed ? Colors.dark_gray : Colors.blue, // Background color
+                        padding: 5,                // Padding around the text
+                        borderRadius: 5,
+                        
+                        height:40
+                            // Rounded corners
+                    }} onPress={handleSuPbscribePress}>
+                        <Text style={styles.buttonText}>{issubscribed ? "subscribed" : "subscribe"}</Text>
+                    </TouchableOpacity>}
+
+                      <TouchableOpacity style={{
+                          backgroundColor:'gray', // Background color
+                          padding: 5,    
+                          paddingHorizontal:20,
+                          flexDirection:'row' ,           // Padding around the text
+                          borderRadius: 5,
+                          
+                          height:40
+                              // Rounded corners
+                      }} onPress={goToMessaging}>
+                          <Image source={require('@/assets/icons/sendM.png')} style={{width:20,height:20,tintColor:'white',alignSelf:'center'}}/>
+                      </TouchableOpacity>
+
+
+                  </View> : <TouchableOpacity  onPress={handleUnblockUser}>
+
+                        <View style={{
+                          backgroundColor:Colors.dark_gray,
+                          padding: 5,                // Padding around the text
+                          borderRadius: 5,
+                          flexDirection:'row',
+                          marginTop:10,
+                          
+                          alignSelf:'center',
+                          width:150,
+                          alignItems:'center'
+                              // Rounded corners
+                          }}>
+
+                          <Image style={{tintColor:'red', width:20, height:20}} source={require('@/assets/icons/blocked.png')} />
+
+                          <Text style={styles.buttonText}>{isaccountprivate ? 'This account is private' :isblocked ? 'Unblock user': 'account restricted'}</Text>
+
+                        </View>
+
+                        
+                    </TouchableOpacity> }
+
+
+                  
+
+          
+
+              </View>
+
+              
+
+          </View>
+
+           <View style={{flexDirection:"row",alignItems:"center",marginTop:10}}> 
+          
+          
+                      <Text style={{fontSize:20,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,marginLeft:20}}>{userInfo ? userInfo.username : ""}</Text>
+          
+                      {(userInfo && userInfo.verified )&& <Image
+                                          resizeMode="contain"
+                                          source={require('@/assets/icons/verified.png')}
+                                          style={{height:25, width:25}}
+                                        />}
+          
+           </View>
+
+          {userInfo !== null && userInfo.caption && <Text style={{fontSize:15,color:'gray',marginLeft:15,marginBottom:10}}>{userInfo.caption}</Text>}
+
+          {/* Business Account Information */}
+          {userInfo && userInfo.isbusinessaccount && userInfo.business && (
+            <View style={styles.businessContainer}>
+              <View style={styles.businessHeader}>
+                <Text style={[styles.businessTitle, {color: colorScheme === 'dark' ? 'white' : 'black'}]}>
+                  {userInfo.business.name || userInfo.username}
+                </Text>
+                <View style={styles.businessBadge}>
+                  <Text style={styles.businessBadgeText}>Business</Text>
+                </View>
+              </View>
+              
+              {userInfo.business.category && (
+                <View style={styles.businessInfoRow}>
+                  {userInfo.business.category.icon ? (
+                    <Text style={styles.categoryEmoji}>{userInfo.business.category.icon}</Text>
+                  ) : (
+                    <Image 
+                      source={require('@/assets/icons/category.png')} 
+                      style={[styles.businessIcon, {tintColor: colorScheme === 'dark' ? '#ccc' : '#666'}]} 
+                    />
+                  )}
+                  <Text style={[styles.businessInfoText, {color: colorScheme === 'dark' ? '#ccc' : '#666'}]}>
+                    {userInfo.business.category.name || userInfo.business.category}
+                  </Text>
+                </View>
+              )}
+              
+              {userInfo.business.address && (
+                <View style={styles.businessInfoRow}>
+                  <Image 
+                    source={require('@/assets/icons/location_outline.png')} 
+                    style={[styles.businessIcon, {tintColor: colorScheme === 'dark' ? '#ccc' : '#666'}]} 
+                  />
+                  <Text 
+                    style={[styles.businessInfoText, styles.addressText, {color: colorScheme === 'dark' ? '#ccc' : '#666'}]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {userInfo.business.address}
+                  </Text>
+                </View>
+              )}
+              
+              <View style={styles.divider} />
+              
+              <View style={styles.businessActions}>
+                <TouchableOpacity 
+                  style={styles.businessActionButton}
+                  onPress={() => {
+                    if (userInfo.uid) {
+                      router.push({
+                        pathname: '/businessContact',
+                        params: { businessId: userInfo.uid }
+                      });
+                    }
+                  }}
+                >
+                  <Image 
+                    source={require('@/assets/icons/call.png')} 
+                    style={styles.actionIcon} 
+                  />
+                  <Text style={styles.businessActionText}>Contact</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.businessActionButton}
+                  onPress={() => {
+                    if (userInfo.business.coordinates) {
+                      const { latitude, longitude } = userInfo.business.coordinates;
+                      const url = Platform.select({
+                        ios: `maps:0,0?q=${latitude},${longitude}`,
+                        android: `geo:0,0?q=${latitude},${longitude}`
+                      });
+                      
+                      Linking.openURL(url);
+                    }
+                  }}
+                >
+                  <Image 
+                    source={require('@/assets/icons/pinview.png')} 
+                    style={styles.actionIcon} 
+                  />
+                  <Text style={styles.businessActionText}>Directions</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                    style={styles.businessActionButton}
+                    onPress={handleOrderBookPress}
+                  >
+                    <Image 
+                      source={require('@/assets/icons/order-food.png')} 
+                      style={styles.actionIcon} 
+                    />
+                    <Text style={styles.businessActionText}>Order/Book </Text>
+                  </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+        </View>
+      ),[userInfo,issubscribed, isblocked]
+    );
 
 
 
@@ -590,6 +697,14 @@ const userprofile = () => {
 
         </View>
 
+
+          {/* Order/Booking Bottom Sheet */}
+          <OrderBookingBottomSheet 
+              ref={orderBottomSheetRef}
+              businessId={uid}
+              businessName={userInfo?.business?.name || userInfo?.username}
+            />
+
         </GestureHandlerRootView>
 
 
@@ -608,43 +723,127 @@ const userprofile = () => {
 export default userprofile
 
 const styles = StyleSheet.create({
-    buttonText: {
-        color: 'white',             // Text color
-        fontSize: 16,  
-        paddingHorizontal:10,             // Font size
-        textAlign: 'center',        // Center the text
-      },
-      container: {
-        flex: 1,
-        marginTop:10,
-       
-      
-        marginHorizontal:3
-      },
-
-      item: {
-    
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        margin: 1,
-        height: Dimensions.get('window').width / numColumns, // approximate a square
-      },
-      icons:{
-        tintColor:'white',
-        height:15,
-        padding:5,
-        width:15
+  buttonText: {
+      color: 'white',             // Text color
+      fontSize: 16,  
+      paddingHorizontal:10,             // Font size
+      textAlign: 'center',        // Center the text
     },
-    text:{
-        color:'#FF0000',fontSize:15,marginStart:10
-      },
-      touchableView:{
-        flex:1,
-        alignItems:'center',
-        
-       
-        flexDirection:'row',
-        marginVertical:10
-      },
+    container: {
+      flex: 1,
+      marginTop:10,
+     
+    
+      marginHorizontal:3
+    },
+
+    item: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: 1,
+      margin: 1,
+      height: Dimensions.get('window').width / numColumns, // approximate a square
+    },
+    icons:{
+      tintColor:'white',
+      height:15,
+      padding:5,
+      width:15
+  },
+  text:{
+      color:'#FF0000',fontSize:15,marginStart:10
+    },
+    touchableView:{
+      flex:1,
+      alignItems:'center',
+      
+     
+      flexDirection:'row',
+      marginVertical:10
+    },
+    businessContainer: {
+      marginHorizontal: 10,
+      marginTop: 10,
+      marginBottom: 15,
+      padding: 15,
+      borderRadius: 8,
+      backgroundColor: 'transparent',
+    },
+    businessHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    businessTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      flex: 1,
+    },
+    businessBadge: {
+      backgroundColor: Colors.blue,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+      marginLeft: 8,
+    },
+    businessBadgeText: {
+      fontSize: 10,
+      fontWeight: 'bold',
+      color: 'white',
+    },
+    businessInfoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    businessIcon: {
+      width: 16,
+      height: 16,
+      marginRight: 8,
+    },
+    businessInfoText: {
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    businessActions: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 5,
+    },
+    businessActionButton: {
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: Colors.blue,
+      borderRadius: 4,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: 1,
+      marginHorizontal: 4,
+    },
+    businessActionText: {
+      color: Colors.blue,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    divider: {
+      height: 0.5,
+      backgroundColor: 'rgba(150, 150, 150, 0.2)',
+      marginVertical: 10,
+    },
+    categoryEmoji: {
+      fontSize: 18,
+      marginRight: 8,
+    },
+    actionIcon: {
+      width: 16,
+      height: 16,
+      marginRight: 6,
+      tintColor: Colors.blue,
+    },
+    addressText: {
+      flex: 1,
+    },
 })

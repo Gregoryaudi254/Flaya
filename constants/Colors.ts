@@ -27,5 +27,8 @@ export const Colors = {
   dark_gray:'#141414',
   light_green:'#88E788',
   light_main:'white',
-  dark_main:'black'
+  dark_main:'black',
+  orange:'#FF6347',
+  green:'#008000',
+  red_orange:'#FF4D00'
 };

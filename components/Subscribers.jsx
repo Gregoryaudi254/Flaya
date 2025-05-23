@@ -93,7 +93,7 @@ const Subscribers = () => {
   
 
 
-          <View style={{flex:1}}>
+          <View style={{flex:1, backgroundColor: colorScheme === 'dark' ? Colors.dark_main : Colors.light_main}}>
 
             {!isrefreshing  ? <FlatList
               bounces={true}

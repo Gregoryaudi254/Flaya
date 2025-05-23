@@ -86,6 +86,17 @@ export default function TabLayout() {
         }}
       />
 
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Admin',
+          tabBarShowLabel:false,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon icon={Icons.admin} name='Profile' color={color} focused={focused} />
+          ),
+        }}
+      />
+
       
     </Tabs>
   );

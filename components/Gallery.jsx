@@ -33,6 +33,16 @@ const Gallery = () => {
     }
   },[value])
 
+  useEffect(() => {
+    if (value !== null && value.intent === "postupdate") {
+      setPosts((prevPosts) => 
+        prevPosts.map((post) => 
+          post.id === value.info.id ? { ...post, description:value.info.description } : post
+        )
+      );
+    }
+  },[value])
+
     const [loadingmore,setLoadingMore] = useState(false);
     const [isrefreshing, setrefreshing] = useState(true);
     const [userinfo, setUserInfo] = useState(null);
@@ -114,7 +124,7 @@ const Gallery = () => {
   return (
 
 
-    <View style={{flex:1}}>
+    <View style={{flex:1, backgroundColor: colorScheme === 'dark' ? Colors.dark_main : Colors.light_main}}>
 
      {!isrefreshing  ? <FlatList
       bounces={true}

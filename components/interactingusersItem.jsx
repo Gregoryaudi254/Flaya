@@ -6,17 +6,14 @@ import { timeAgo } from '@/constants/timeAgo';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Colors } from '@/constants/Colors';
 
-const interactingusersItem = React.memo(({userinfo:{coordinates,username,createdAt,profilephoto,senderid},postcoordinate,handleChatPress,handleUserPress}) => {
+const interactingusersItem = React.memo(({userinfo:{coordinates,username,createdAt,profilephoto,senderid,uid},postcoordinate,handleChatPress,handleUserPress}) => {
 
   const colorScheme = useColorScheme();
 
-  console.log("items "+coordinates+" hehe"+postcoordinate)
 
-
- 
   const distance = getDistance(
-      { latitude: coordinates.latitude || 0, longitude: coordinates.longitude || 0 },
-      { latitude: postcoordinate.latitude || 0, longitude: postcoordinate.longitude || 0 }
+      { latitude: coordinates.latitude || coordinates._latitude, longitude: coordinates.longitude || coordinates._longitude },
+      { latitude: postcoordinate._latitude || postcoordinate.latitude, longitude: postcoordinate._longitude || postcoordinate.longitude }
   );
 
 
@@ -66,15 +63,19 @@ return (
       </TouchableOpacity>
 
 
-      <TouchableOpacity onPress={() => handleChatPress(senderid,username)} style={{
+      <TouchableOpacity onPress={() => handleChatPress(senderid || uid,username)} style={{
         // Background color
           padding: 5, 
           paddingHorizontal:10,               // Padding around the text
-          borderRadius: 5,
-          height:40
+          borderRadius: 15,
+          justifyContent:'center',
+          marginEnd:10,
+          height:40,
+          backgroundColor:"gray"
               // Rounded corners
-      }} >
-          <Image source={require('@/assets/icons/sendM.png')} style={{width:20,height:20,tintColor:'orange',alignSelf:'center'}}/>
+      }} > 
+       <Image source={require('@/assets/icons/sendM.png')} style={{width:20,height:20,tintColor:'white',alignSelf:'center'}}/>
+          
       </TouchableOpacity>
 
 

@@ -24,10 +24,11 @@ export default function RootLayout() {
            <Stack.Screen name="settings" options={{ title: 'Settings and Privacy',headerShown:false, animation:'slide_from_right' }} /> 
 
 
-           <Stack.Screen name="profileedit" options={{ title: 'Edit profile',headerShown:true, animation:'slide_from_right' }} />
+           <Stack.Screen name="profileedit" options={{ title: 'Edit profile',headerShown:true, animation:'slide_from_right',headerShadowVisible: false}} />
 
            <Stack.Screen name="userprofile" options={{ headerShown:false , animation:'slide_from_right'}} />
 
+           <Stack.Screen name="businesscategory" options={{ title: '' , animation:'slide_from_right', headerShadowVisible:false}} />
 
         </Stack>
       </ThemeProvider>

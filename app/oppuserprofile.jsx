@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View,FlatList,TouchableOpacity ,Image,Dimensions, ActivityIndicator, RefreshControl} from 'react-native'
+import { StyleSheet, Text, View,FlatList,TouchableOpacity ,Image,Dimensions, ActivityIndicator, RefreshControl, Platform, Linking} from 'react-native'
 import React,{useCallback, useEffect, useMemo,useRef, useState} from 'react'
 
 import { Data } from '@/constants/Data'
@@ -23,6 +23,7 @@ import { useSelector } from 'react-redux';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import ReportBottomSheet from '@/components/ReportBottomSheet';
 import MemoizedBottomSheetUser from '@/components/MemoizedBottomSheetUser';
+import OrderBookingBottomSheet from '@/components/OrderBookingBottomSheet';
 
 const oppuserprofile = () => {
 
@@ -34,6 +35,7 @@ const oppuserprofile = () => {
 
     const bottomSheetRef = useRef(null);
     const reportbottomSheetRef = useRef(null);
+    const orderBottomSheetRef = useRef(null);
 
     const initialSnapIndex = -1;
 
@@ -62,7 +64,6 @@ const oppuserprofile = () => {
     const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
 
     
-
     const getUserInfo = async () => {
 
        const currentuserInfo = await getData('@profile_info')
@@ -312,6 +313,13 @@ const oppuserprofile = () => {
         }
       }, [isBottomSheetOpen]);
 
+       // Add new function to handle order/book button press
+    const handleOrderBookPress = () => {
+      if (userInfo && userInfo.isbusinessaccount) {
+        orderBottomSheetRef.current?.snapToIndex(0);
+      }
+    };
+
     const listHeaderComponent = useMemo(
         () => (
           <View style={{ flexDirection: 'column', marginBottom: 10 ,flex:1}}>
@@ -452,8 +460,108 @@ const oppuserprofile = () => {
             
              </View>
 
+            {userInfo !== null && userInfo.caption && <Text style={{fontSize:15,color:'gray',marginLeft:15,marginBottom:10}}>{userInfo.caption}</Text>}
 
-            {(userInfo !== null && userInfo.caption) && <Text style={{fontSize:15,color:'gray',marginLeft:20,marginBottom:10}}>{userInfo.caption}</Text>}
+            {/* Business Account Information */}
+            {userInfo && userInfo.isbusinessaccount && userInfo.business && (
+              <View style={styles.businessContainer}>
+                <View style={styles.businessHeader}>
+                  <Text style={[styles.businessTitle, {color: colorScheme === 'dark' ? 'white' : 'black'}]}>
+                    {userInfo.business.name || userInfo.username}
+                  </Text>
+                  <View style={styles.businessBadge}>
+                    <Text style={styles.businessBadgeText}>Business</Text>
+                  </View>
+                </View>
+                
+                {userInfo.business.category && (
+                  <View style={styles.businessInfoRow}>
+                    {userInfo.business.category.icon ? (
+                      <Text style={styles.categoryEmoji}>{userInfo.business.category.icon}</Text>
+                    ) : (
+                      <Image 
+                        source={require('@/assets/icons/category.png')} 
+                        style={[styles.businessIcon, {tintColor: colorScheme === 'dark' ? '#ccc' : '#666'}]} 
+                      />
+                    )}
+                    <Text style={[styles.businessInfoText, {color: colorScheme === 'dark' ? '#ccc' : '#666'}]}>
+                      {userInfo.business.category.name || userInfo.business.category}
+                    </Text>
+                  </View>
+                )}
+                
+                {userInfo.business.address && (
+                  <View style={styles.businessInfoRow}>
+                    <Image 
+                      source={require('@/assets/icons/location_outline.png')} 
+                      style={[styles.businessIcon, {tintColor: colorScheme === 'dark' ? '#ccc' : '#666'}]} 
+                    />
+                    <Text 
+                      style={[styles.businessInfoText, styles.addressText, {color: colorScheme === 'dark' ? '#ccc' : '#666'}]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {userInfo.business.address}
+                    </Text>
+                  </View>
+                )}
+                
+                <View style={styles.divider} />
+                
+                <View style={styles.businessActions}>
+                  <TouchableOpacity 
+                    style={styles.businessActionButton}
+                    onPress={() => {
+                      if (userInfo.uid) {
+                        router.push({
+                          pathname: '/businessContact',
+                          params: { businessId: userInfo.uid }
+                        });
+                      }
+                    }}
+                  >
+                    <Image 
+                      source={require('@/assets/icons/call.png')} 
+                      style={styles.actionIcon} 
+                    />
+                    <Text style={styles.businessActionText}>Contact</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.businessActionButton}
+                    onPress={() => {
+                      if (userInfo.business.coordinates) {
+                        const { latitude, longitude } = userInfo.business.coordinates;
+                        const url = Platform.select({
+                          ios: `maps:0,0?q=${latitude},${longitude}`,
+                          android: `geo:0,0?q=${latitude},${longitude}`
+                        });
+                        
+                        Linking.openURL(url);
+                      }
+                    }}
+                  >
+                    <Image 
+                      source={require('@/assets/icons/pinview.png')} 
+                      style={styles.actionIcon} 
+                    />
+                    <Text style={styles.businessActionText}>Directions</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.businessActionButton}
+                    onPress={handleOrderBookPress}
+                  >
+                    <Image 
+                      source={require('@/assets/icons/order-food.png')} 
+                      style={styles.actionIcon} 
+                    />
+                    <Text style={styles.businessActionText}>Order/Book </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
           </View>
         ),[userInfo,issubscribed, isblocked]
       );
@@ -530,7 +638,7 @@ const oppuserprofile = () => {
       }) 
     
 
-
+   
 
   return (
 
@@ -664,6 +772,13 @@ const oppuserprofile = () => {
 
             </BottomSheet> */}
 
+            {/* Order/Booking Bottom Sheet */}
+            <OrderBookingBottomSheet 
+              ref={orderBottomSheetRef}
+              businessId={uid}
+              businessName={userInfo?.business?.name || userInfo?.username}
+            />
+
         </View>
 
         </GestureHandlerRootView>
@@ -722,5 +837,90 @@ const styles = StyleSheet.create({
        
         flexDirection:'row',
         marginVertical:10
+      },
+      businessContainer: {
+        marginHorizontal: 10,
+        marginTop: 10,
+        marginBottom: 15,
+        padding: 15,
+        borderRadius: 8,
+        backgroundColor: 'transparent',
+      },
+      businessHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+      },
+      businessTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        flex: 1,
+      },
+      businessBadge: {
+        backgroundColor: Colors.blue,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginLeft: 8,
+      },
+      businessBadgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: 'white',
+      },
+      businessInfoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+      },
+      businessIcon: {
+        width: 16,
+        height: 16,
+        marginRight: 8,
+      },
+      businessInfoText: {
+        fontSize: 14,
+        lineHeight: 20,
+      },
+      businessActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 5,
+      },
+      businessActionButton: {
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+        borderColor: Colors.blue,
+        borderRadius: 4,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+        marginHorizontal: 4,
+      },
+      businessActionText: {
+        color: Colors.blue,
+        fontSize: 14,
+        fontWeight: '600',
+      },
+      divider: {
+        height: 0.5,
+        backgroundColor: 'rgba(150, 150, 150, 0.2)',
+        marginVertical: 10,
+      },
+      categoryEmoji: {
+        fontSize: 18,
+        marginRight: 8,
+      },
+      actionIcon: {
+        width: 16,
+        height: 16,
+        marginRight: 6,
+        tintColor: Colors.blue,
+      },
+      addressText: {
+        flex: 1,
       },
 })
