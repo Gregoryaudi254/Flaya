@@ -317,7 +317,8 @@ const home = () => {
 
     const data = await getPoarts("getPosts", {
       userid: userinfo.uid,
-      postlength: posts.length,  // Send current length to get only new posts
+      postlength: posts.length,
+      isrefreshing : isRefreshing // Send current length to get only new posts
     });
   
     console.log("we made it")

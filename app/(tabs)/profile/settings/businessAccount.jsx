@@ -176,6 +176,8 @@ const BusinessAccountScreen = () => {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude
       };
+      
+      // Update coordinates state
       setCoordinates(newCoordinates);
 
       // Update map location with animation
@@ -193,23 +195,29 @@ const BusinessAccountScreen = () => {
         mapRef.current.animateToRegion(newRegion, 1000);
       }
     
-      // Get address from coordinates
-      const geocode = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      });
-      
-      if (geocode.length > 0) {
-        const addressComponents = geocode[0];
-        const formattedAddress = [
-          addressComponents.street,
-          addressComponents.city,
-          addressComponents.region,
-          addressComponents.postalCode,
-          addressComponents.country
-        ].filter(Boolean).join(', ');
+      // Get address from coordinates (optional - you can remove this if not needed)
+      try {
+        const geocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        });
         
-        //setAddress(formattedAddress);
+        if (geocode.length > 0) {
+          const addressComponents = geocode[0];
+          const formattedAddress = [
+            addressComponents.street,
+            addressComponents.city,
+            addressComponents.region,
+            addressComponents.postalCode,
+            addressComponents.country
+          ].filter(Boolean).join(', ');
+          
+          // Optionally set the address if you want to auto-fill it
+          // setAddress(formattedAddress);
+        }
+      } catch (geocodeError) {
+        console.log("Geocoding failed:", geocodeError);
+        // Don't fail the whole operation if geocoding fails
       }
       
       setLocationFetching(false);
@@ -400,6 +408,13 @@ const BusinessAccountScreen = () => {
   const handleRegionChangeComplete = (region) => {
     console.log(region)
     setUserLocation(region);
+    
+    // Update coordinates to match the center of the map
+    const newCoordinates = {
+      latitude: region.latitude,
+      longitude: region.longitude
+    };
+    setCoordinates(newCoordinates);
   };
   
   // Dismiss keyboard on press outside inputs
@@ -626,13 +641,15 @@ const BusinessAccountScreen = () => {
                       ref={mapRef}
                       style={styles.map}
                       initialRegion={userLocation || {
-                        latitude: 0,
-                        longitude: 0,
+                        latitude: -1.2921,  // Nairobi coordinates as default
+                        longitude: 36.8219,
                         latitudeDelta: 0.0922,
                         longitudeDelta: 0.0421,
                       }}
                       provider={PROVIDER_GOOGLE}
                       onRegionChangeComplete={handleRegionChangeComplete}
+                      showsUserLocation={true}
+                      showsMyLocationButton={false}
                     >
                       {coordinates && (
                         <Marker
@@ -696,6 +713,9 @@ const BusinessAccountScreen = () => {
                       />
                       <Text style={styles.coordinatesText}>
                         {coordinates.latitude.toFixed(6)}, {coordinates.longitude.toFixed(6)}
+                      </Text>
+                      <Text style={[styles.coordinatesText, { marginLeft: 8, fontSize: 12, opacity: 0.7 }]}>
+                        (Move map to adjust)
                       </Text>
                     </View>
                   )}

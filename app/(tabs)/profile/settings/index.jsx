@@ -291,7 +291,7 @@ const index = () => {
               <View style={styles.pendingBadge}>
                 <Text style={styles.pendingBadgeText}>Pending</Text>
               </View>
-            ) : (
+            ) : accountType === "personal" && (
               <View style={styles.settingRight}>
                 <Text style={[styles.settingValue, { color: isDark ? '#AAAAAA' : '#8A8A8E', marginRight: 5 }]}>
                   Personal

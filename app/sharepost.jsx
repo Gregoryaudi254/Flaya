@@ -310,33 +310,33 @@ const SharePostScreen = () => {
                     
                     const fileName = compressedUri.split('/').pop();
                     const response = await fetch(compressedUri);
-                    const storageRef = ref(storage, `uploads/images/${credentials.user.uid}/${fileName}`);
+                      const storageRef = ref(storage, `uploads/images/${credentials.user.uid}/${fileName}`);
 
                     if (!response.ok) {
                       throw new Error("Failed to fetch image");
-                    }
+                      }
 
-                    const mediaBlob = await response.blob();
+                     const mediaBlob = await response.blob();
                     const uploadTask = uploadBytesResumable(storageRef, mediaBlob);
   
-                    await new Promise((resolve, reject) => {
+                      await new Promise((resolve, reject) => {
                         uploadTask.on(
-                            'state_changed',
-                            (snapshot) => {
-                                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                              'state_changed',
+                              (snapshot) => {
+                                  const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                                 dispatch(updateProgress(progress));
-                            },
-                            (error) => {
-                                console.error('Upload error:', error);
+                              },
+                              (error) => {
+                                  console.error('Upload error:', error);
                                 reject(error);
-                            },
-                            async () => {
-                                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                              },
+                              async () => {
+                                  const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                                 urls.push(downloadURL);
                                 resolve();
-                            }
-                        );
-                    });
+                              }
+                          );
+                      });
                   }
               } else {
                   const compressedVideoUri = await compressVideo(content[0]);
@@ -348,18 +348,37 @@ const SharePostScreen = () => {
                   const uploadTask = uploadBytesResumable(storageRef, blob);
       
                   const fileNameImage = thumbnail.split('/').pop();
-                  const responseImage = await fetch(thumbnail);
-                  const storageRefImage = ref(storage, `uploads/images/${credentials.user.uid}/${fileNameImage}`);
+                    const responseImage = await fetch(thumbnail);
+                    const storageRefImage = ref(storage, `uploads/images/${credentials.user.uid}/${fileNameImage}`);
 
                   if (!responseImage.ok) {
                     throw new Error("Failed to fetch thumbnail");
-                  }
+                    }
 
-                  const mediaBlob = await responseImage.blob();
-                  const uploadTaskImage = uploadBytesResumable(storageRefImage, mediaBlob);
+                    const mediaBlob = await responseImage.blob();
+                    const uploadTaskImage = uploadBytesResumable(storageRefImage, mediaBlob);
 
-                  await new Promise((resolve, reject) => {
-                    uploadTaskImage.on(
+                    await new Promise((resolve, reject) => {
+                      uploadTaskImage.on(
+                            'state_changed',
+                            (snapshot) => {
+                                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                            dispatch(updateProgress(progress));
+                            },
+                            (error) => {
+                                console.error('Upload error:', error);
+                            reject(error);
+                            },
+                            async () => {
+                                thumbnailGenerated = await getDownloadURL(uploadTaskImage.snapshot.ref);
+                                dispatch(updateProgress(0));
+                            resolve();
+                            }
+                        );
+                    });
+
+                    await new Promise((resolve, reject) => {
+                      uploadTask.on(
                         'state_changed',
                         (snapshot) => {
                             const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
@@ -367,32 +386,13 @@ const SharePostScreen = () => {
                         },
                         (error) => {
                             console.error('Upload error:', error);
-                            reject(error);
+                            reject();
+                          dispatch(finishUpload());
                         },
                         async () => {
-                            thumbnailGenerated = await getDownloadURL(uploadTaskImage.snapshot.ref);
-                            dispatch(updateProgress(0));
-                            resolve();
-                        }
-                    );
-                  });
-
-                  await new Promise((resolve, reject) => {
-                    uploadTask.on(
-                      'state_changed',
-                      (snapshot) => {
-                          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                          dispatch(updateProgress(progress));
-                      },
-                      (error) => {
-                          console.error('Upload error:', error);
-                          reject();
-                          dispatch(finishUpload());
-                      },
-                      async () => {
-                          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                           urls.push(downloadURL);
-                          resolve();
+                            resolve();
                       }
                     );
                   });
@@ -407,9 +407,9 @@ const SharePostScreen = () => {
                 interactions: 0,
                 likes: 0,
                 tags: tags.length > 0 ? tags.map(({ uid, profilephoto, username }) => ({
-                    uid,
-                    profilephoto,
-                    username,
+                  uid,
+                  profilephoto,
+                  username,
                 })) : [],
                 views: 0,
                 isshowinglocation: showLocation,
@@ -418,9 +418,9 @@ const SharePostScreen = () => {
                 createdAt: serverTimestamp()
               };
 
-              if (contentType !== 'image') {
+               if (contentType !== 'image') {
                 data.thumbnail = thumbnailGenerated;
-              }
+               }
 
               await setDoc(doc(db, `users/${credentials.user.uid}/posts`, id), data);
               console.log('Files uploaded successfully:', urls);
@@ -441,15 +441,15 @@ const SharePostScreen = () => {
       if (contentType === null) {
         setUploadOk(false);
         showToast("Please select an image or video first");
-        return;
-      }
+                return;
+            }
 
-      if (description !== null && description !== undefined) {
-        if (description.length > 170) {
+            if (description !== null && description !== undefined) {
+              if (description.length > 170) {
           showToast("Description too long (max 170 characters)");
           return;
-        }
-      }
+              }
+            }
 
       if (hasAcceptedGuidelines === false) {
         setShowGuidelinesPromise(true);
@@ -457,21 +457,21 @@ const SharePostScreen = () => {
       }
 
       setloading(true);
-      handleUploadProcess();
+            handleUploadProcess();
     };
 
     async function handleUploadProcess() {
       try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
           showToast("Location access is required");
           setloading(false);
-          return;
-        }
+            return;
+          }
 
-        let currentLocation = await Location.getCurrentPositionAsync({});
+          let currentLocation = await Location.getCurrentPositionAsync({});
 
-        const item = {
+          const item = {
           content: contentType === 'image' ? pickedImages : pickedVideos,
           description: description,
           contentType: contentType,
@@ -484,7 +484,7 @@ const SharePostScreen = () => {
       } catch (error) {
         console.error("Error starting upload:", error);
         showToast("Failed to start upload: " + error.message);
-        setloading(false);
+            setloading(false);
       }
     }
 
@@ -776,7 +776,7 @@ const SharePostScreen = () => {
                 value={showLocation} 
                 onValueChange={() => setshowLocation(!showLocation)}
               />
-            </TouchableOpacity>
+      </TouchableOpacity>
     </Animated.View>
 
     { (subscriptionStatus !== null && subscriptionStatus === "inactive") && <TouchableOpacity 
@@ -796,8 +796,8 @@ const SharePostScreen = () => {
                   <Text style={styles.alertText}>Upgrade your account</Text>
                   <Ionicons name="chevron-forward" size={16} color="white" />
 
-                  </View>
-                 
+        </View>
+
                 </TouchableOpacity>}
 { (subscriptionStatus !== null && subscriptionStatus === "active") && 
     <TouchableOpacity
@@ -1004,7 +1004,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   shareButtonText: {
-    color: 'white',
+                color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },

@@ -275,7 +275,7 @@ const profileInfo = () => {
                 {imageSource ? (
                   <Image source={{ uri: imageSource }} style={styles.profileImage} />
                 ) : (
-                  <View style={[styles.profileImagePlaceholder, {backgroundColor: Colors.blue}]}>
+                  <View style={[styles.profileImagePlaceholder, {backgroundColor: Colors.red_orange}]}>
                     <Ionicons name="person" size={40} color="#FFFFFF" />
                   </View>
                 )}
@@ -286,7 +286,7 @@ const profileInfo = () => {
             </View>
 
             <View style={styles.formContainer}>
-              <Text style={[styles.inputLabel, {color: isDark ? Colors.light_main : Colors.red_orange}]}>
+              <Text style={[styles.inputLabel, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
                 Username
               </Text>
               <View style={[styles.inputContainer, isAvailable === false && styles.validInput, isAvailable === true && styles.invalidInput]}>
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: Colors.blue,
+    backgroundColor: Colors.red_orange,
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -493,7 +493,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   continueButton: {
-    backgroundColor: Colors.blue,
+    backgroundColor: Colors.red_orange,
     borderRadius: 12,
     paddingVertical: 15,
     flexDirection: 'row',

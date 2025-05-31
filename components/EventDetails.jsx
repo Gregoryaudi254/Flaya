@@ -173,13 +173,10 @@ const EventDetails = ({ event , setInvitationStatus, invitationStatus, checkInSh
 
       <View style={{flexDirection:'row', alignItems:'center',marginStart:10}}>
 
-        <View style={[styles.dateCircle, {borderColor:'#800080', borderWidth:0.8}]}>
-
-            <View style={{backgroundColor:"#800080", width:"101%", alignItems:"center", borderTopRightRadius:10, borderTopLeftRadius:10, marginEnd:-1, marginStart:-1}}>
-              <Text style={[styles.dateMonth, {color: isDark ? 'white' : "black"}]}>{event.dateMonth || 'Sep'}</Text>
-
+        <View style={[styles.dateCircle, {backgroundColor: isDark ? '#2A2A2A' : '#FFFFFF'}]}>
+            <View style={styles.dateMonthContainer}>
+              <Text style={styles.dateMonth}>{event.dateMonth || 'Sep'}</Text>
             </View>
-            
             <Text style={[styles.dateDay, {color: isDark ? 'white' : "black"}]}>{event.dateDay || '24'}</Text>
         </View>
 
@@ -217,26 +214,32 @@ const EventDetails = ({ event , setInvitationStatus, invitationStatus, checkInSh
       
       {/* Location Section */}
       <View style={styles.section}>
-        <View style={styles.locationHeader}>
-          <View style={styles.locationIconContainer}>
-            <Ionicons name="location-outline" size={24} color="#fff" />
+        <Text style={[styles.sectionLabel, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
+          Location
+        </Text>
+        <View style={styles.locationCard}>
+          <View style={styles.locationHeader}>
+            <View style={[styles.locationIconContainer, {backgroundColor: Colors.blue}]}>
+              <Ionicons name="location-outline" size={20} color="#fff" />
+            </View>
+            <View style={styles.locationTextContainer}>
+              <Text style={[styles.locationText, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
+                {event.location?.address || '4517 Washington Ave.'}
+              </Text>
+              <Text style={[styles.locationSubtext, {color: isDark ? '#CCC' : '#666'}]}>
+                {event.location?.city || 'Manchester Lorem Ipsum'}
+              </Text>
+            </View>
           </View>
-          <View style={styles.locationTextContainer}>
-            <Text style={[styles.locationText, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
-              {event.location?.address || '4517 Washington Ave.'}
-            </Text>
-            <Text style={styles.locationSubtext}>
-              {event.location?.city || 'Manchester Lorem Ipsum'}
-            </Text>
-          </View>
+          
+          <TouchableOpacity 
+            style={styles.directionButton}
+            onPress={handleGetDirection}
+          >
+            <Ionicons name="navigate-outline" size={16} color="white" style={{marginRight: 5}} />
+            <Text style={styles.directionButtonText}>Get Direction</Text>
+          </TouchableOpacity>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.directionButton}
-          onPress={handleGetDirection}
-        >
-          <Text style={styles.directionButtonText}>Get Direction</Text>
-        </TouchableOpacity>
       </View>
       
       {/* Host Section */}
@@ -245,13 +248,23 @@ const EventDetails = ({ event , setInvitationStatus, invitationStatus, checkInSh
           Hosted By
         </Text>
         <View style={styles.hostContainer}>
-          <Image 
-            source={{ uri: event.host?.profileImage || 'https://randomuser.me/api/portraits/men/32.jpg' }} 
-            style={styles.hostImage} 
-          />
-          <Text style={[styles.hostName, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
-            {event.host?.name || 'Mike Wazowski'}
-          </Text>
+          <View style={styles.hostInfo}>
+            <Image 
+              source={{ uri: event.host?.profileImage || 'https://randomuser.me/api/portraits/men/32.jpg' }} 
+              style={styles.hostImage} 
+            />
+            <View style={styles.hostDetails}>
+              <Text style={[styles.hostName, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
+                {event.host?.name || 'Mike Wazowski'}
+              </Text>
+              <Text style={[styles.hostTitle, {color: isDark ? '#CCC' : '#666'}]}>
+                Event Organizer
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.messageHostButton}>
+            <Ionicons name="chatbubble-outline" size={18} color={Colors.blue} />
+          </TouchableOpacity>
         </View>
       </View>
       
@@ -260,38 +273,58 @@ const EventDetails = ({ event , setInvitationStatus, invitationStatus, checkInSh
       {
         event.attendees?.length > 0 &&
         <View style={styles.section}>
-        <Text style={[styles.sectionLabel, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
-          People Going ({event.attendees?.length || 24} People)
-        </Text>
-        <View style={styles.attendeesContainer}>
-          {event.attendees?.slice(0, 4).map((attendee, index) => (
-            <Image 
-              key={attendee.id || index}
-              source={{ uri: attendee.profileImage }}
-              style={[styles.attendeeImage, { marginLeft: index > 0 ? -15 : 0 }]} 
-            />
-          )) || 
-          // Fallback if no attendees
-          [1, 2, 3, 4].map((item, index) => (
-            <Image 
-              key={item}
-              source={{ uri: `https://randomuser.me/api/portraits/${index % 2 === 0 ? 'men' : 'women'}/${20 + index}.jpg` }}
-              style={[styles.attendeeImage, { marginLeft: index > 0 ? -15 : 0 }]} 
-            />
-          ))}
+          <View style={styles.attendeesHeader}>
+            <Text style={[styles.sectionLabel, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
+              People Going ({event.attendees?.length || 24} People)
+            </Text>
+            {event.attendees?.length > 118 && (
+              <TouchableOpacity style={styles.viewAllButton}>
+                <Text style={styles.viewAllText}>View All</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.blue} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.attendeesContainer}>
+            {event.attendees?.slice(0, 4).map((attendee, index) => (
+              <Image 
+                key={attendee.id || index}
+                source={{ uri: attendee.profileImage }}
+                style={[styles.attendeeImage, { marginLeft: index > 0 ? -15 : 0 }]} 
+              />
+            )) || 
+            // Fallback if no attendees
+            [1, 2, 3, 4].map((item, index) => (
+              <Image 
+                key={item}
+                source={{ uri: `https://randomuser.me/api/portraits/${index % 2 === 0 ? 'men' : 'women'}/${20 + index}.jpg` }}
+                style={[styles.attendeeImage, { marginLeft: index > 0 ? -15 : 0 }]} 
+              />
+            ))}
+            {event.attendees?.length > 4 && (
+              <View style={[styles.moreAttendeesCircle, { marginLeft: -15 }]}>
+                <Text style={styles.moreAttendeesText}>+{event.attendees.length - 4}</Text>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
       }
       
       
       {/* Check In Button */}
       <View style={styles.checkInContainer}>
 
-        <View style={[{width:"40%", borderBlockColor:isDark ? Colors.light_main : Colors.dark_main, borderWidth:0.8, paddingVertical:10, paddingHorizontal:3, borderRadius:10, alignItems:'center'}]} onPress={handleCheckIn}>
-         
-          <Text style={[styles.checkInText, {color:isDark ? Colors.light_main : Colors.dark_main}]}>{event.price || "Free"}</Text>
+        <View style={[styles.priceContainer, {borderColor: isDark ? Colors.light_main : Colors.dark_main}]}>
+          <View style={styles.priceHeader}>
+            <Ionicons name="pricetag-outline" size={16} color={Colors.blue} />
+            <Text style={[styles.priceLabel, {color: isDark ? '#CCC' : '#666'}]}>Price</Text>
+          </View>
+          <Text style={[styles.priceText, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
+            {event.price === "Free" || event.price === "0" ? "FREE" : `KSH ${event.price}`}
+          </Text>
+          {event.price !== "Free" && event.price !== "0" && (
+            <Text style={[styles.priceSubtext, {color: isDark ? '#999' : '#888'}]}>per person</Text>
+          )}
         </View>
-
 
         <TouchableOpacity 
           style={[
@@ -366,21 +399,26 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   dateCircle: {
-  
-   
-    borderRadius: 10,
+    borderRadius: 12,
     width: 70,
     height: 70,
-   
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-      }
-    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 0, 128, 0.2)',
+  },
+  dateMonthContainer: {
+    backgroundColor: '#800080',
+    width: '101%',
+    alignItems: 'center',
+    borderTopRightRadius: 10,
+    borderTopLeftRadius: 10,
+    marginEnd: -1,
+    marginStart: -1,
   },
   dateMonth: {
     fontSize: 15,
@@ -455,6 +493,7 @@ const styles = StyleSheet.create({
   directionButton: {
     backgroundColor: '#007AFF',
     paddingVertical: 8,
+    flexDirection: 'row',
     paddingHorizontal: 15,
     borderRadius: 20,
     alignSelf: 'flex-start',
@@ -472,10 +511,14 @@ const styles = StyleSheet.create({
   hostContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(200,200,200,0.2)',
-    padding: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(200,200,200,0.1)',
+    padding: 12,
+    borderRadius: 12,
+  },
+  hostInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   hostImage: {
     width: 30,
@@ -483,10 +526,20 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     marginRight: 8,
   },
+  hostDetails: {
+    flexDirection: 'column',
+  },
   hostName: {
     fontSize: 14,
     fontWeight: '500',
     marginRight: 5,
+  },
+  hostTitle: {
+    fontSize: 12,
+    color: '#666',
+  },
+  messageHostButton: {
+    padding: 5,
   },
   attendeesContainer: {
     flexDirection: 'row',
@@ -549,6 +602,67 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  priceContainer: {
+    borderWidth: 1,
+    borderColor: Colors.light_main,
+    padding: 10,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  priceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  priceLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 5,
+  },
+  priceText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  priceSubtext: {
+    fontSize: 12,
+    color: '#666',
+  },
+  attendeesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewAllText: {
+    color: Colors.blue,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  moreAttendeesCircle: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    backgroundColor: Colors.blue,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  moreAttendeesText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  locationCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
 });
 

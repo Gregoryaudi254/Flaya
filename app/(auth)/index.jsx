@@ -133,7 +133,7 @@ const WalkthroughScreen = () => {
       ])
     ).start();
   }, []);
-  
+
   // Handle animation for new slide
   useEffect(() => {
     // Reset animations
@@ -242,8 +242,8 @@ const WalkthroughScreen = () => {
                 onPress={finishOnboarding}
               >
                 <Text style={styles.skipButtonText}>Skip</Text>
-              </TouchableOpacity>
-              
+            </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.nextButton}
                 onPress={handleNext}
@@ -285,7 +285,7 @@ const WalkthroughScreen = () => {
       
       <View style={styles.indicatorWrapper}>
         <Indicator scrollX={scrollX} data={data} />
-      </View>
+        </View>
     </SafeAreaView>
   );
 };

@@ -316,34 +316,34 @@ const ShareStoryScreen = () => {
                   
                   const fileName = compressedUri.split('/').pop();
                   const response = await fetch(compressedUri);
-                  const storageRef = ref(storage, `uploads/images/${credentials.user.uid}/${fileName}`);
+                      const storageRef = ref(storage, `uploads/images/${credentials.user.uid}/${fileName}`);
 
                   if (!response.ok) {
                     throw new Error("Failed to fetch image");
-                  }
+                      }
 
-                  const mediaBlob = await response.blob();
+                     const mediaBlob = await response.blob();
                   const uploadTask = uploadBytesResumable(storageRef, mediaBlob);
       
-                  // Monitor the upload progress
-                  await new Promise((resolve, reject) => {
-                    uploadTask.on(
-                        'state_changed',
-                        (snapshot) => {
-                            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                      // Monitor the upload progress
+                      await new Promise((resolve, reject) => {
+                        uploadTask.on(
+                              'state_changed',
+                              (snapshot) => {
+                                  const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                             dispatch(updateProgress(progress));
-                        },
-                        (error) => {
-                            console.error('Upload error:', error);
+                              },
+                              (error) => {
+                                  console.error('Upload error:', error);
                             reject(error);
-                        },
-                        async () => {
-                            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                              },
+                              async () => {
+                                  const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                             urls.push(downloadURL);
                             resolve();
-                        }
-                    );
-                  });
+                              }
+                          );
+                      });
               } else {
                   // Compress and upload video
                   const compressedVideoUri = await compressVideo(content[0]);
@@ -370,7 +370,7 @@ const ShareStoryScreen = () => {
                   
                   const mediaBlob = await responseImage.blob();
                   const uploadTaskImage = uploadBytesResumable(storageRefImage, mediaBlob);
-
+                  
                   // Upload thumbnail
                   await new Promise((resolve, reject) => {
                     uploadTaskImage.on(
@@ -429,7 +429,7 @@ const ShareStoryScreen = () => {
 
               if (contentType !== 'image') {
                 data.thumbnail = thumbnailGenerated;
-              }
+               }
 
               // Save to Firestore
               await setDoc(doc(db, `users/${credentials.user.uid}/stories`, id), data);
@@ -462,26 +462,26 @@ const ShareStoryScreen = () => {
       // Check if user has accepted community guidelines
       if (hasAcceptedGuidelines === false) {
         setShowGuidelinesPromise(true);
-        return;
-      }
+                return;
+            }
 
-      setloading(true);
-      handleUploadProcess();
+            setloading(true);
+            handleUploadProcess();
     };
 
     async function handleUploadProcess() {
       try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
           showToast("Location access is required to share stories");
           setloading(false);
-          return;
-        }
+            return;
+          }
 
-        // Get the user's current location
-        let currentLocation = await Location.getCurrentPositionAsync({});
+          // Get the user's current location
+          let currentLocation = await Location.getCurrentPositionAsync({});
 
-        const item = {
+          const item = {
           content: contentType === 'image' ? pickedImages : pickedVideos,
           caption: caption,
           contentType: contentType,
@@ -493,11 +493,11 @@ const ShareStoryScreen = () => {
       } catch (error) {
         console.error("Upload process error:", error);
         showToast("Failed to share story: " + error.message);
-        setloading(false);
+            setloading(false);
       }
-    }
+        }
 
-    const navigation = useNavigation();
+        const navigation = useNavigation();
 
     const handleHeaderRightPress = () => {
       pickVideoAsync();

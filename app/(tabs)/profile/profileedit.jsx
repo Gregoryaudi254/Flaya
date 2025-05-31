@@ -316,6 +316,8 @@ const ProfileEditScreen = () => {
   };
 
   const businessInfoSheetRef = useRef(null);
+  const [showEditSheet, setShowEditSheet] = useState(false);
+  
   
   const [editSection, setEditSection] = useState(null);
 
@@ -330,9 +332,7 @@ const ProfileEditScreen = () => {
   };
   
   const handleEditBusinessInfo = () => {
-    if (businessInfoSheetRef.current) {
-      businessInfoSheetRef.current.snapToIndex(1);
-    }
+    setShowEditSheet(true);
   };
 
   const [dialog, setDialog] = useState(false);
@@ -540,7 +540,7 @@ const ProfileEditScreen = () => {
                     <Text style={[styles.sectionTitle, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
                       Business Information
                     </Text>
-                    <View style={[styles.badge, { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.2)' : 'rgba(0, 122, 255, 0.1)' }]}>
+                    <View style={[styles.badge, { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.2)' : 'rgba(0, 122, 255, 0.1)', marginLeft: 10 }]}>
                       <Text style={styles.badgeText}>Business</Text>
                     </View>
                   </View>
@@ -628,10 +628,11 @@ const ProfileEditScreen = () => {
 
       {userdata && (
         <BusinessInfoEditSheet
-          ref={businessInfoSheetRef}
           userId={userdata.uid}
           business={userdata?.business}
           onUpdate={handleBusinessInfoUpdate}
+          visible={showEditSheet}
+          onClose={() => setShowEditSheet(false)}
         />
       )}
 

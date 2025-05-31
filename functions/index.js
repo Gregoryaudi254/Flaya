@@ -1952,7 +1952,7 @@ exports.onPostsCall = functions.firestore.document("users/{userid}")
 
 exports.getPosts = functions.https.onCall(async (data, context) => {
   try {
-    const {userid, postlength} = data;
+    const {userid, postlength, isrefreshing} = data;
 
     if (!userid) {
       return console.log("id not found");
@@ -2078,7 +2078,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
     const validPosts = fullPosts.filter(Boolean);
 
     // Check if we need to fetch businesses (after the 10th post or if there aren't many posts)
-    if (postlength === 0 && userSnap.data().version === 5) {
+    if ((postlength === 0 || isrefreshing) && userSnap.data().version === 5) {
       // After checking for events, also check for businesses
       const businessesGeoCollection = geofirestore.collection("businesses");
 
@@ -2087,7 +2087,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
 
       const query = businessesGeoCollection.near({
         center: new admin.firestore.GeoPoint(userLat, userLng),
-        radius: 350, // Radius in kilometers (slightly larger than events)
+        radius: 3500, // Radius in kilometers (slightly larger than events)
       });
 
       // Fetch the nearest businesses, limit to 10
@@ -2116,7 +2116,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
 
         // Determine insertion position
         if (validPosts.length > 3) {
-          validPosts.splice(3, 0, businessesObject); // Insert after the 10th item
+          validPosts.splice(1, 0, businessesObject); // Insert after the 1st item
         } else {
           validPosts.push(businessesObject); // Add at the end
         }
@@ -2125,7 +2125,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
       }
     }
 
-    if (postlength === 0 && userSnap.data().version === 5) {
+    if ((postlength === 0 || isrefreshing) && userSnap.data().version === 5) {
       // Get events if any
       const eventsgeocollection = geofirestore.collection("events");
 
@@ -2134,7 +2134,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
 
       const query = eventsgeocollection.near({
         center: new admin.firestore.GeoPoint(userLat, userLng),
-        radius: 350, // Radius in kilometers
+        radius: 3500, // Radius in kilometers
       });
 
       // Fetch the nearest events, limit to 10
@@ -2160,8 +2160,8 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
         const eventsObject = {contentType: "event", events, id:"id12"};
 
         // Determine insertion position
-        if (validPosts.length > 6) {
-          validPosts.splice(6, 0, eventsObject); // Insert after the 5th item
+        if (validPosts.length > 5) {
+          validPosts.splice(4, 0, eventsObject); // Insert after the 5th item
         } else {
           validPosts.push(eventsObject); // Add at the end
         }
@@ -2269,7 +2269,7 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
   const cachedDistances = new Map();
   const userLat = userCoordinates.latitude;
   const userLng = userCoordinates.longitude;
-  const simulation = 40000;
+  const simulation = 4000000;
 
   // Fetch seen post IDs for this user and convert to Set for O(1) lookups
   const seenPostsSnap = await db.collection("users").doc(userid).collection("seenposts").get();
@@ -2288,7 +2288,7 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
   // Query nearby areas within 40km
   const query = geocollection.near({
     center: new admin.firestore.GeoPoint(userLat, userLng),
-    radius: 40, // Radius in kilometers
+    radius: 1000, // Radius in kilometers
   });
 
   const snapshot = await query.get();
@@ -2369,6 +2369,8 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
             return acc;
           }, []);
 
+          console.log("filtered posts "+JSON.stringify(filteredPosts));
+
           if (filteredPosts.length > 0 && regularPosts.length < 50) {
             // Sort by popularity and take up to 20 posts
             filteredPosts.sort((a, b) => b.popularity - a.popularity);
@@ -2376,6 +2378,8 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
           }
         }
       }
+
+      console.log("regular posts "+JSON.stringify(regularPosts));
 
       // Process trending posts
       if (trendingSnap.exists) {
@@ -2400,11 +2404,15 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
           return acc;
         }, []);
 
+        console.log("filtered trending "+JSON.stringify(filteredTrending));
+
         if (filteredTrending.length > 0) {
           filteredTrending.sort((a, b) => b.popularity - a.popularity);
           trendingPosts = trendingPosts.concat(filteredTrending.slice(0, 5));
         }
       }
+
+      console.log("trending posts "+JSON.stringify(trendingPosts));
     }
   }
 
@@ -2465,6 +2473,8 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
           }
           return acc;
         }, []);
+
+        console.log("filtered similar "+JSON.stringify(filteredSimilarPosts));
 
               similarPosts = similarPosts.concat(filteredSimilarPosts);
       }
@@ -2692,7 +2702,7 @@ exports.getStoriesNearby = functions.https.onRequest(async (req, res) => {
     const geocollection = geoFirestore.collection("storiesnearby");
     const query = geocollection.near({
       center: new admin.firestore.GeoPoint(latitude, longitude),
-      radius: 10, // Radius in km
+      radius: 500, // Radius in km
     });
 
     const storiesNearby = await query.get();
@@ -4542,7 +4552,7 @@ exports.getEventsNearby = functions.https.onCall(async (data, context) => {
     // GeoQuery (fetch more than needed)
     const query = eventsgeocollection.near({
       center: new admin.firestore.GeoPoint(userLat, userLng),
-      radius: 350, // Radius in kilometers
+      radius: 500, // Radius in kilometers
     });
 
     // Execute the query
@@ -4696,7 +4706,7 @@ exports.getBusinessesNearby = functions.https.onCall(async (data, context) => {
     // GeoQuery (fetch more than needed)
     const query = businessgeocollection.near({
       center: new admin.firestore.GeoPoint(userLat, userLng),
-      radius: 350, // Radius in kilometers
+      radius: 500, // Radius in kilometers
     });
 
     // Execute the query

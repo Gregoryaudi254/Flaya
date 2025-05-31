@@ -11,12 +11,12 @@ import {
   ActivityIndicator,
   Keyboard,
   Image,
-  Dimensions
+  Dimensions,
+  Modal
 } from 'react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { collection, doc, getDocs, limit, query, updateDoc, where, getDoc } from 'firebase/firestore';
 import { db, functions } from '@/constants/firebase';
 import { useToast } from 'react-native-toast-notifications';
@@ -31,14 +31,11 @@ import { getData } from '@/constants/localstorage';
 
 const { width } = Dimensions.get('window');
 
-const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, ref) => {
+const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, visible, onClose }, ref) => {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const toast = useToast();
   const navigation = useNavigation();
-
-  // Bottom sheet snap points
-  const snapPoints = useMemo(() => ['25%', '75%', '90%'], []);
   
   // Form state
   const [businessName, setBusinessName] = useState(business?.name || '');
@@ -51,37 +48,46 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
 
   // Map location state
   const [userLocation, setUserLocation] = useState({
-    latitude: business?.coordinates?._latitude || business?.coordinates?.latitude || 0,
-    longitude: business?.coordinates?._longitude || business?.coordinates?.longitude || 0,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
+    latitude: business?.coordinates?._latitude || business?.coordinates?.latitude || -1.2921,
+    longitude: business?.coordinates?._longitude || business?.coordinates?.longitude || 36.8219,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
   });
 
   const user = useSelector(state => state.user);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
 
+  const fetchUserData = async () => {
+      
+    try {
+      const userinfo = await getData('@profile_info')
+      // Get subscription status
+      const callbackFunction = httpsCallable(functions, 'getSubscriptionStatus');
+      const response = await callbackFunction({ userid: userinfo.uid });
+      
+      if (response.data.subscriptionType === null) {
+        setSubscriptionStatus('inactive');
+      } else {
+        setSubscriptionStatus(response.data.status);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
+  
+
   // Fetch user data including subscription
   useEffect(() => {
-    const fetchUserData = async () => {
-      
-      try {
-        const userinfo = await getData('@profile_info')
-        // Get subscription status
-        const callbackFunction = httpsCallable(functions, 'getSubscriptionStatus');
-        const response = await callbackFunction({ userid: userinfo.uid });
-        
-        if (response.data.subscriptionType === null) {
-          setSubscriptionStatus('inactive');
-        } else {
-          setSubscriptionStatus(response.data.status);
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-      }
-    };
-    
     fetchUserData();
   }, [user]);
+
+  const { value } = useSelector(state => state.data);
+  
+  useEffect(() => {
+    if (value !== null && (value.intent === 'subscriptionchange')) {
+      fetchUserData();
+    }
+  },[value]);
 
   // Get user location
   useEffect(() => {
@@ -94,8 +100,8 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
           setUserLocation({
             latitude: business.coordinates._latitude || business.coordinates.latitude,
             longitude: business.coordinates._longitude || business.coordinates.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
           });
           setMapLoading(false);
           return;
@@ -115,8 +121,8 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
         setUserLocation({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
         });
       } catch (error) {
         console.error('Error getting location:', error);
@@ -246,9 +252,9 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
       
       showToast('Business information updated successfully');
       
-      // Close the bottom sheet
-      if (ref.current) {
-        ref.current.close();
+      // Close the modal
+      if (onClose) {
+        onClose();
       }
     } catch (error) {
       console.error('Error updating business info:', error);
@@ -256,7 +262,7 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
     } finally {
       setLoading(false);
     }
-  }, [userId, businessName, address, phone, email, userLocation, isFormValid, onUpdate]);
+  }, [userId, businessName, address, phone, email, userLocation, isFormValid, onUpdate, onClose]);
 
   // Toast helper
   const showToast = (message) => {
@@ -269,6 +275,8 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
     });
   };
 
+  
+
   const renderContent = () => {
     // Add subscription verification
     const hasActiveSubscription = 
@@ -277,6 +285,11 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
     if (!hasActiveSubscription) {
       return (
         <View style={styles.subscriptionRequired}>
+
+
+
+         { subscriptionStatus !== null ? <View style={{alignItems:'center', justifyContent:'center', padding:20}}>
+
           <MaterialIcons name="business-center" size={40} color="#666" />
           <Text style={styles.subscriptionTitle}>Subscription Required</Text>
           <Text style={styles.subscriptionText}>
@@ -285,8 +298,10 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
           <TouchableOpacity 
             style={styles.subscriptionButton}
             onPress={() => {
-              // Close this sheet and navigate to subscription page
-              ref.current?.close();
+              // Close this modal and navigate to subscription page
+              if (onClose) {
+                onClose();
+              }
               setTimeout(() => {
                 navigation.navigate('subscriptionPage');
               }, 300);
@@ -294,6 +309,10 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
           >
             <Text style={styles.subscriptionButtonText}>Manage Subscription</Text>
           </TouchableOpacity>
+
+          </View> :  <View style={{ flex: 1, justifyContent: 'center' }}>
+        <ActivityIndicator style={{ alignSelf: 'center' }} size="large" color={isDark ? Colors.light_main : Colors.dark_main} />
+        </View>}
         </View>
       );
     }
@@ -402,6 +421,15 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
                   provider="google"
                   onRegionChangeComplete={handleRegionChangeComplete}
                   showsUserLocation
+                  showsMyLocationButton={false}
+                  zoomEnabled={true}
+                  scrollEnabled={true}
+                  pitchEnabled={true}
+                  rotateEnabled={true}
+                  zoomTapEnabled={true}
+                  zoomControlEnabled={true}
+                  minZoomLevel={1}
+                  maxZoomLevel={20}
                 >
                 </MapView>
                 <View style={styles.markerFixed}>
@@ -410,6 +438,39 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
                     source={require('@/assets/icons/markerpin.png')}
                   />
                 </View>
+                
+                <TouchableOpacity
+                  style={styles.getCurrentLocationButton}
+                  onPress={async () => {
+                    try {
+                      setMapLoading(true);
+                      const { status } = await Location.requestForegroundPermissionsAsync();
+                      
+                      if (status !== 'granted') {
+                        showToast('Permission to access location was denied');
+                        setMapLoading(false);
+                        return;
+                      }
+                      
+                      const location = await Location.getCurrentPositionAsync({});
+                      const newRegion = {
+                        latitude: location.coords.latitude,
+                        longitude: location.coords.longitude,
+                        latitudeDelta: 0.0922,
+                        longitudeDelta: 0.0421,
+                      };
+                      setUserLocation(newRegion);
+                      setMapLoading(false);
+                    } catch (error) {
+                      console.error('Error getting location:', error);
+                      showToast('Could not get your location');
+                      setMapLoading(false);
+                    }
+                  }}
+                >
+                  <Ionicons name="locate" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.getCurrentLocationText}>Current Location</Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
@@ -448,37 +509,61 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate }, 
   };
 
   return (
-    <BottomSheet
-      ref={ref}
-      index={-1}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      backgroundStyle={{ backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF' }}
-      handleIndicatorStyle={{ backgroundColor: isDark ? '#666666' : '#CCCCCC' }}
-      style={{ zIndex: 2 }}
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
     >
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
-          Edit Business Information
-        </Text>
-        <TouchableOpacity 
-          style={[styles.closeButton, { backgroundColor: isDark ? '#333333' : '#EEEEEE' }]}
-          onPress={() => ref.current?.close()}
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <Ionicons name="close" size={20} color={isDark ? '#FFFFFF' : '#333333'} />
-        </TouchableOpacity>
-      </View>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF' }]}>
+            <View style={styles.header}>
+              <Text style={[styles.headerTitle, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
+                Edit Business Information
+              </Text>
+              <TouchableOpacity 
+                style={[styles.closeButton, { backgroundColor: isDark ? '#333333' : '#EEEEEE' }]}
+                onPress={onClose}
+              >
+                <Ionicons name="close" size={20} color={isDark ? '#FFFFFF' : '#333333'} />
+              </TouchableOpacity>
+            </View>
 
-      <BottomSheetScrollView 
-        contentContainerStyle={[styles.contentContainer, { paddingBottom: keyboardStatus ? 280 : 50 }]}
-      >
-        {renderContent()}
-      </BottomSheetScrollView>
-    </BottomSheet>
+            <ScrollView 
+              style={styles.scrollView}
+              contentContainerStyle={[styles.contentContainer, { paddingBottom: keyboardStatus ? 100 : 30 }]}
+              showsVerticalScrollIndicator={false}
+            >
+              {renderContent()}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 });
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '100%',
+    height: '90%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -499,6 +584,9 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  scrollView: {
+    flex: 1,
   },
   contentContainer: {
     padding: 20,
@@ -613,6 +701,27 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+  },
+  getCurrentLocationButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#0066CC',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  getCurrentLocationText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 12,
   },
 });
 

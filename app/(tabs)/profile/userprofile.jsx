@@ -455,7 +455,7 @@ const userprofile = () => {
                       {(userInfo && userInfo.verified )&& <Image
                                           resizeMode="contain"
                                           source={require('@/assets/icons/verified.png')}
-                                          style={{height:25, width:25}}
+                                          style={{height:20, width:20}}
                                         />}
           
            </View>

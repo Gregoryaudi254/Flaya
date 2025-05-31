@@ -37,6 +37,7 @@ const BusinessCategoryEdit = ({ initialCategory, onCategoryUpdate }) => {
     { label: 'Home Accessories', value: 'Home Accessories' },
     { label: 'Drinks & Beverages', value: 'Drinks & Beverages' },
     { label: 'Entertainment', value: 'Entertainment' },
+    { label: 'Other', value: 'Other' },
    
    
   ]);

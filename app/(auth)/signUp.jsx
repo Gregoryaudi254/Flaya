@@ -45,7 +45,9 @@ const signUp = () => {
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('devicecreatorid', '==', uniqueID));
     const snapshot = await getDocs(q);
-    return snapshot.docs.length < 4;
+    // return snapshot.docs.length < 4;
+
+    return true;
   }
 
   const checkinput = async () => {
