@@ -40,6 +40,8 @@ const BusinessOrdersScreen = () => {
     fetchOrders();
   }, [activeTab]);
 
+  const [status, setStatus] = useState([]);
+
   const fetchOrders = async () => {
     try {
       setLoading(true);
@@ -55,6 +57,8 @@ const BusinessOrdersScreen = () => {
       const ordersRef = collection(db, `users/${userInfo.uid}/orders`);
       const q = query(ordersRef, orderBy('createdAt', 'desc') , where('status', '!=' , "removed"));
       const querySnapshot = await getDocs(q);
+
+      setStatus(querySnapshot.docs.map((snap) => snap.data().status));
       
       const ordersData = querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -185,18 +189,37 @@ const BusinessOrdersScreen = () => {
     });
   };
 
-  const renderEmptyList = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons 
-        name="receipt-outline" 
-        size={80} 
-        color={isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'} 
-      />
-      <Text style={[styles.emptyText, { color: isDark ? '#AAAAAA' : '#666666' }]}>
-        No {activeTab} orders found
-      </Text>
-    </View>
-  );
+  const renderEmptyList = () => {
+    const emptyMessages = {
+      all: "No orders found",
+      pending: "No pending orders",
+      completed: "No completed orders"
+    };
+    
+    const emptyIcons = {
+      all: "receipt-outline",
+      pending: "time-outline", 
+      completed: "checkmark-circle-outline"
+    };
+    
+    return (
+      <View style={styles.emptyContainer}>
+        <Ionicons 
+          name={emptyIcons[activeTab]} 
+          size={80} 
+          color={isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'} 
+        />
+        <Text style={[styles.emptyText, { color: isDark ? '#AAAAAA' : '#666666' }]}>
+          {emptyMessages[activeTab]}
+        </Text>
+        <Text style={[styles.emptySubtext, { color: isDark ? '#888888' : '#999999' }]}>
+          {activeTab === 'all' ? 'Your business orders will appear here' : 
+           activeTab === 'pending' ? 'New orders requiring attention will appear here' :
+           'Completed orders will be shown here'}
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#121212' : '#F5F5F5' }]}>
@@ -209,7 +232,7 @@ const BusinessOrdersScreen = () => {
         }}
       />
       
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF' }]}>
 
       <TouchableOpacity 
           style={[
@@ -219,13 +242,27 @@ const BusinessOrdersScreen = () => {
           ]}
           onPress={() => setActiveTab('all')}
         >
-          <Text style={[
-            styles.tabText, 
-            activeTab === 'all' && styles.activeTabText,
-            { color: activeTab === 'all' ? (isDark ? '#FFFFFF' : '#000000') : '#888888' }
-          ]}>
-            All
-          </Text>
+          <View style={styles.tabContent}>
+            <Ionicons 
+              name="list-outline" 
+              size={18} 
+              color={activeTab === 'all' ? Colors.blue : '#888888'} 
+            />
+            <Text style={[
+              styles.tabText, 
+              activeTab === 'all' && styles.activeTabText,
+              { color: activeTab === 'all' ? Colors.blue : '#888888' }
+            ]}>
+              All Orders
+            </Text>
+
+            {status.length > 0 && (
+            <View style={[styles.countBadge, { backgroundColor: Colors.blue }]}>
+              <Text style={styles.countText}>{status.length}</Text>
+            </View>
+          )}
+          </View>
+         
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -236,13 +273,29 @@ const BusinessOrdersScreen = () => {
           ]}
           onPress={() => setActiveTab('pending')}
         >
-          <Text style={[
-            styles.tabText, 
-            activeTab === 'pending' && styles.activeTabText,
-            { color: activeTab === 'pending' ? (isDark ? '#FFFFFF' : '#000000') : '#888888' }
-          ]}>
-            Pending
-          </Text>
+          <View style={styles.tabContent}>
+            <Ionicons 
+              name="time-outline" 
+              size={18} 
+              color={activeTab === 'pending' ? Colors.orange : '#888888'} 
+            />
+            <Text style={[
+              styles.tabText, 
+              activeTab === 'pending' && styles.activeTabText,
+              { color: activeTab === 'pending' ? Colors.orange : '#888888' }
+            ]}>
+              Pending
+            </Text>
+
+            {status.filter(order => order === 'pending').length > 0 && (
+            <View style={[styles.countBadge, { backgroundColor: Colors.orange }]}>
+              <Text style={styles.countText}>
+                {status.filter(order => order === 'pending').length}
+              </Text>
+            </View>
+          )}
+          </View>
+          
         </TouchableOpacity>
         
         <TouchableOpacity 
@@ -253,13 +306,28 @@ const BusinessOrdersScreen = () => {
           ]}
           onPress={() => setActiveTab('completed')}
         >
-          <Text style={[
-            styles.tabText, 
-            activeTab === 'completed' && styles.activeTabText,
-            { color: activeTab === 'completed' ? (isDark ? '#FFFFFF' : '#000000') : '#888888' }
-          ]}>
-            Completed
-          </Text>
+          <View style={styles.tabContent}>
+            <Ionicons 
+              name="checkmark-circle-outline" 
+              size={18} 
+              color={activeTab === 'completed' ? Colors.green : '#888888'} 
+            />
+            <Text style={[
+              styles.tabText, 
+              activeTab === 'completed' && styles.activeTabText,
+              { color: activeTab === 'completed' ? Colors.green : '#888888' }
+            ]}>
+              Completed
+            </Text>
+            {status.filter(order => order === 'completed').length > 0 && (
+            <View style={[styles.countBadge, { backgroundColor: Colors.green }]}>
+              <Text style={styles.countText}>
+                {status.filter(order => order === 'completed').length}
+              </Text>
+            </View>
+          )}
+          </View>
+          
         </TouchableOpacity>
         
        
@@ -309,20 +377,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(150,150,150,0.2)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+    paddingHorizontal: 5,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
+    position: 'relative',
   },
   activeTab: {
     borderBottomWidth: 3,
   },
   tabText: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   activeTabText: {
     fontWeight: '700',
@@ -349,6 +426,28 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    marginTop: 8,
+  },
+  tabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  countBadge: {
+    backgroundColor: Colors.blue,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 

@@ -313,7 +313,7 @@ const ShareStoryScreen = () => {
               if (item.contentType === 'image') {
                   // Compress and upload image
                   const compressedUri = await compressImage(content[0]);
-                  
+
                   const fileName = compressedUri.split('/').pop();
                   const response = await fetch(compressedUri);
                       const storageRef = ref(storage, `uploads/images/${credentials.user.uid}/${fileName}`);

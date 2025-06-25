@@ -3,11 +3,14 @@ import React from 'react'
 import { Colors } from '@/constants/Colors'
 import moment from 'moment'
 import { timeAgo } from '@/constants/timeAgo'
+import { Ionicons } from '@expo/vector-icons'
+import { useColorScheme } from '@/hooks/useColorScheme'
 
 
 const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,location,timestamp,isdeleted,receiverid},onReplySelect,showDate,currentuserid}) => {
 
-
+    const colorScheme = useColorScheme();
+    const isDark = colorScheme === 'dark';
     const isSenderCurrentUser = senderid === currentuserid;
 
    // console.log("current "+status)
@@ -23,18 +26,30 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
 
     isdeleted ? 
 
-    (<View style={{backgroundColor:'gray',padding:10,alignSelf:isSenderCurrentUser? 'flex-end':'flex-start',borderRadius:10}}>
-
-        <Text style={{fontSize:15,color:'black',fontStyle:'italic'}}>Message deleted</Text>
-
+    (<View style={[styles.deletedMessageContainer, {
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+      alignSelf: isSenderCurrentUser ? 'flex-end' : 'flex-start',
+    }]}>
+        <Ionicons name="ban" size={16} color={isDark ? '#666' : '#AAA'} />
+        <Text style={[styles.deletedMessageText, {
+          color: isDark ? '#666' : '#AAA'
+        }]}>
+          Message deleted
+        </Text>
     </View>):
 
-    (<View style={{flex:1}}>
+    (<View style={styles.messageContainer}>
 
         {showDate && (
-            <Text style={styles.dateText}>
-            {formatTimestamp(timestamp,true)}
-            </Text>
+            <View style={[styles.modernDateContainer, {
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            }]}>
+              <Text style={[styles.modernDateText, {
+                color: isDark ? '#AAA' : '#666'
+              }]}>
+                {formatTimestamp(timestamp,true)}
+              </Text>
+            </View>
         )}
 
         
@@ -42,62 +57,84 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
         <View 
         style={{alignSelf:isSenderCurrentUser? 'flex-end':'flex-start',
        
-        maxWidth:'60%',flexDirection:'row',}}>
+        maxWidth:'75%',flexDirection:'row',marginVertical: 2}}>
 
-            {isSenderCurrentUser && status === 'sending' && <Image
-                
-                source={require('@/assets/icons/loading.png')}
-                style={[
-                { width: 15, height: 15,tintColor:'gray' ,alignSelf:'flex-end',marginEnd:5}
-                ]}
-
-            />
+            {isSenderCurrentUser && status === 'sending' && 
+              <View style={styles.sendingIndicator}>
+                <Ionicons name="time" size={14} color={isDark ? '#666' : '#AAA'} />
+              </View>
             }
 
 
-            <View style={[styles.mainView,messageType !== 'location' ?
-                 {backgroundColor:isSenderCurrentUser?'white':Colors.blue}:{backgroundColor:'green'}
-                 ,{padding:messageType === 'image'? 3 :10}]}>
+            <View style={[styles.modernMessageBubble,
+                {
+                  backgroundColor: isSenderCurrentUser 
+                    ? Colors.blue 
+                    : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'),
+                  
+                  borderTopLeftRadius: isSenderCurrentUser ? 20 : 4,
+                  borderTopRightRadius: isSenderCurrentUser ? 4 : 20,
+                  borderBottomLeftRadius: 20,
+                  borderBottomRightRadius: 20,
+                  
+                  shadowColor: isSenderCurrentUser ? Colors.blue : '#000',
+                  shadowOffset: {
+                    width: 0,
+                    height: 2,
+                  },
+                  shadowOpacity: isSenderCurrentUser ? 0.3 : 0.1,
+                  shadowRadius: 3,
+                  elevation: 3,
+                },
+                messageType === 'image' ? styles.imageBubblePadding : styles.textBubblePadding
+              ]}>
 
-                { mainmessage && <TouchableOpacity onPress={()=> onReplySelect(mainmessage.id)}>
-                    <View style={{padding:5,backgroundColor:'gray',borderRadius:10,marginBottom:3}}>
+                { mainmessage && 
+                  <TouchableOpacity onPress={()=> onReplySelect(mainmessage.id)}>
+                    <View style={[styles.modernReplyContainer, {
+                      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+                      borderLeftColor: isSenderCurrentUser ? 'rgba(255, 255, 255, 0.5)' : Colors.blue,
+                    }]}>
 
-                    <Text 
-                    style={{color:'white',fontSize:15,fontWeight:'bold'}}>
-                    {mainmessage.sendername}</Text>
+                    <Text style={[styles.replyAuthorText, {
+                      color: isSenderCurrentUser ? 'rgba(255, 255, 255, 0.8)' : Colors.blue
+                    }]}>
+                      {mainmessage.sendername}
+                    </Text>
 
 
                     {mainmessage.messageType === 'text' ? (
-                        <Text 
-                        style={{color:'white',fontSize:15}}>
-                        {mainmessage.message}</Text>
+                        <Text style={[styles.replyContentText, {
+                          color: isSenderCurrentUser ? 'rgba(255, 255, 255, 0.7)' : (isDark ? '#AAA' : '#666')
+                        }]}>
+                          {mainmessage.message}
+                        </Text>
 
                     ): mainmessage.messageType === 'image' ?
                     ( 
-                        <Image style={{width:30,height:30,borderRadius:5}} source={{uri:mainmessage.image}} />
+                        <View style={styles.replyImageContainer}>
+                          <Image style={styles.replyImage} source={{uri:mainmessage.image}} />
+                          <Text style={[styles.replyContentText, {
+                            color: isSenderCurrentUser ? 'rgba(255, 255, 255, 0.7)' : (isDark ? '#AAA' : '#666')
+                          }]}>
+                            Photo
+                          </Text>
+                        </View>
                     ):( 
-                        <View style={{flexDirection:'row',alignItems:'center',marginEnd:10,width:'70%'}}>
-
-                        <Image
-                        style={styles.locationIcons}
-                        source={require('@/assets/icons/location.png')}
-                        />
-
-                        <View style={{height:40,width:1,backgroundColor:'white',marginStart:5}}/>
-
-
-                        <Text numberOfLines={2}
-                        style={{fontSize:15,color:'white',marginStart:5}}>
-                        {mainmessage.location.address}</Text>
-
-
-
-                    </View>
-
-                    )
-                    }
-
-                    
+                        <View style={styles.replyLocationContainer}>
+                          <Ionicons
+                            name="location"
+                            size={14}
+                            color={isSenderCurrentUser ? 'rgba(255, 255, 255, 0.7)' : (isDark ? '#AAA' : '#666')}
+                          />
+                          <Text numberOfLines={1} style={[styles.replyContentText, {
+                            color: isSenderCurrentUser ? 'rgba(255, 255, 255, 0.7)' : (isDark ? '#AAA' : '#666'),
+                            marginLeft: 4,
+                          }]}>
+                            {mainmessage.location.address}
+                          </Text>
+                        </View>
+                    )}
                         
                   </View>
 
@@ -105,166 +142,228 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
                 
                 }
 
-                {
-                    messageType === 'image'? 
+                {/* Message Content */}
+                {messageType === 'text' && (
+                    <Text style={[styles.modernMessageText, {
+                      color: isSenderCurrentUser ? 'white' : (isDark ? Colors.light_main : Colors.dark_main)
+                    }]}>
+                        {message}
+                    </Text>
+                )}
 
-                    <View
-                    style={{width:200,height:200,justifyContent:'center',alignItems:'center'}}>
+                {messageType === 'image' && (
+                    <Image 
+                        style={styles.modernMessageImage} 
+                        source={{uri: Array.isArray(images) ? images[0] : images}} 
+                        resizeMode="cover"
+                    />
+                )}
 
-                        <View style={{flex:1,flexDirection:'row'}}>
-
-                        <Image
-                                
-                                source={{ uri: images[0] }}
-                                style={[
-                                styles.photo,
-                                { width: images.length > 1 ? '50%' : '100%',
-                                 height: (images.length === 1 || images.length === 2 )? 200:'100%' }
-                                ]}
-                            />
-
-
-                            {images.length > 1 && <Image
-                            
-                                source={{ uri: images[1] }}
-                                style={[
-                                styles.photo,
-                                { width: '50%', height: images.length === 2 ? 200:'100%' }
-                                ]}
-                            />}
-
-
+                {messageType === 'location' && (
+                    <View style={styles.modernLocationContainer}>
+                        
+                        <View style={[styles.locationHeader, {
+                          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                        }]}>
+                          <Ionicons 
+                            name="location" 
+                            size={18} 
+                            color="white" 
+                          />
+                          <Text style={styles.locationTitle}>
+                            Shared Location
+                          </Text>
                         </View>
 
+                        <Text style={styles.modernLocationText}>
+                            {location.address}
+                        </Text>
 
-                        <View style={{flex:1,flexDirection:'row'}}>
-
-                            {images.length > 2 && <Image
-                                
-                                source={{ uri: images[2] }}
-                                style={[
-                                styles.photo,
-                                { width:images.length === 3 ?  '100%':'50%', height: '100%' }
-                                ]}
-                            />}
-
-
-                            {images.length > 3 && <Image
-                            
-                                source={{ uri: images[3] }}
-                                style={[
-                                styles.photo,
-                                { width: '50%', height: '100%' }
-                                ]}
-                            />}
-
-
+                        <View style={[styles.locationPreview, {
+                          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                        }]}>
+                          <Ionicons name="map" size={20} color="rgba(255, 255, 255, 0.7)" />
+                          <Text style={styles.viewMapText}>
+                            Tap to view on map
+                          </Text>
                         </View>
-
-
-                        { images.length > 4 &&
-                            <View 
-                            style={{width:40,height:40,
-                                elevation:10,
-                                shadowColor: 'black',
-                                shadowOffset: { width: 0, height: 5 },
-                                shadowOpacity: 3,
-                                shadowRadius: 5,
-                                borderRadius:20,position:'absolute',
-                                justifyContent:'center',alignItems:'center',
-                                backgroundColor:'white',}}>
-
-                                <Text style={{fontSize:20,color:'black',fontWeight:'bold'}}>{images.length}</Text>
-
-                            </View>
-                        }
-
-
-
-
-
-
+                        
                     </View>
+                )}
 
-                    
-
-                    :messageType === 'text' ?
-                    
-                    (<Text 
-                    style={{alignSelf:isSenderCurrentUser? 'flex-end':'flex-start'}}>
-                    {message}</Text>):
-
-                    (<View style={{flexDirection:'row',alignItems:'center',marginEnd:10}}>
-
-                        <Image
-                        style={styles.locationIcons}
-                        source={require('@/assets/icons/location.png')}
-                        />
-
-                        <View style={{height:40,width:1,backgroundColor:'white',marginStart:5}}/>
-
-
-                        <Text numberOfLines={2}
-                        style={{fontSize:15,color:'white',marginStart:5}}>
-                        {location.address}</Text>
-
-
-
-                    </View>)
-                   
-                }
-
-                <Text numberOfLines={1}
-                style={{fontSize:10,color:isSenderCurrentUser?'gray':'white',marginStart:5,alignSelf: 'flex-end'}}>
-                {formatTimestamp(timestamp,false)}</Text>
-
-
-
+                {/* Timestamp */}
+                <View style={styles.modernTimestampContainer}>
+                  <Text style={[styles.modernTimestampText, {
+                    color: isSenderCurrentUser 
+                      ? 'rgba(255, 255, 255, 0.7)' 
+                      : (isDark ? '#666' : '#AAA')
+                  }]}>
+                    {formatTimestamp(timestamp,false)}
+                  </Text>
+                  
+                  {isSenderCurrentUser && (
+                    <Ionicons 
+                      name={status === 'sent' ? 'checkmark' : 'checkmark-done'} 
+                      size={12} 
+                      color={status === 'read' ? '#22C55E' : 'rgba(255, 255, 255, 0.7)'} 
+                      style={{ marginLeft: 4 }}
+                    />
+                  )}
+                </View>
 
             </View>
 
-
-
-        
-           
-
-          
-
         </View>
 
-
-       
-
-
-      
     </View>)
   )
 }
 
 export default ChatItem
 
-const styles = StyleSheet.create({photo: {
-   borderRadius:5
-    
-  },
-  locationIcons:{
-    width: 25,
-    height: 25,
-   tintColor:'white',
-    marginHorizontal:5
-
-  },
-  mainView:{ 
-  borderRadius:5,
-  marginEnd:5
-  },
-  dateText: {
-    textAlign: 'center',
-    color: 'gray',
-    alignSelf:'center',
-    marginVertical: 10,
-    fontSize: 14,
+const styles = StyleSheet.create({
+  messageContainer: {
+    flex: 1,
+    paddingVertical: 2,
   },
   
-    
+  // Deleted message styles
+  deletedMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    maxWidth: '70%',
+    marginVertical: 2,
+  },
+  deletedMessageText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginLeft: 8,
+  },
+
+  // Date display styles
+  modernDateContainer: {
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginVertical: 8,
+  },
+  modernDateText: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+
+  // Sending indicator
+  sendingIndicator: {
+    alignSelf: 'flex-end',
+    marginRight: 8,
+    marginBottom: 4,
+  },
+
+  // Modern message bubble
+  modernMessageBubble: {
+    minWidth: 80,
+    maxWidth: '100%',
+  },
+  textBubblePadding: {
+    padding: 12,
+  },
+  imageBubblePadding: {
+    padding: 4,
+  },
+
+  // Reply container styles
+  modernReplyContainer: {
+    padding: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    marginBottom: 8,
+  },
+  replyAuthorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  replyContentText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  replyImageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  replyImage: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  replyLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+
+  // Message content styles
+  modernMessageText: {
+    fontSize: 16,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  modernMessageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+  },
+
+  // Location message styles
+  modernLocationContainer: {
+    width: 240,
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  locationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
+    marginLeft: 6,
+  },
+  modernLocationText: {
+    fontSize: 14,
+    color: 'white',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  locationPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  viewMapText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginLeft: 6,
+  },
+
+  // Timestamp styles
+  modernTimestampContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  modernTimestampText: {
+    fontSize: 11,
+    fontWeight: '400',
+  },
 })

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, ActivityIndicator, ScrollView, Alert, Image, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, ActivityIndicator, ScrollView, Alert, Image, Linking, Modal } from 'react-native';
 
 import { Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,8 +15,14 @@ import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { setData } from '@/slices/dataChangeSlice';
 import { Stack } from 'expo-router';
+import { FlutterwaveInit, PayWithFlutterwave } from 'flutterwave-react-native';
 
 import * as Clipboard from 'expo-clipboard';
+import { useAuth } from '@/constants/AuthContext';
+
+import * as Localization from 'react-native-localize';
+import BottomSheet from '@gorhom/bottom-sheet';
+import FlutterwavePaymentBottomSheet from '@/components/FlutterwavePaymentBottomSheet';
 
 
 // Demo subscription data
@@ -60,21 +66,126 @@ export default function SubscriptionComponent() {
   const [userInfo, setUserInfo] = useState(null);
   
   const [paymentError, setPaymentError] = useState(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('mpesa'); // 'mpesa' or 'flutterwave'
+  const [flutterwaveOptions, setFlutterwaveOptions] = useState(null);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+  const [currentAction, setCurrentAction] = useState(null); // 'renew', 'upgrade', 'downgrade'
 
   const paymentSuccess = useRef(false);
   const toast = useToast();
   const router = useRouter();
   const dispatch = useDispatch();
-  const user = useSelector(state => state.user);
 
   const snapPoints = useMemo(() => ['40%'], []);
   const bottomSheetRef = useRef(null);
+  const flutterwaveBottomSheetRef = useRef(null);
 
   // Open the payment bottom sheet
   const openPaymentSheet = () => {
+    console.log("Opening M-Pesa payment sheet");
     paymentSuccess.current = false;
     setPaymentError(null);
    bottomSheetRef.current?.snapToIndex(0);
+  };
+
+  // Open payment method selection modal
+  const openPaymentMethodModal = (action = 'renew') => {
+    console.log("Opening payment method modal for action:", action);
+    setCurrentAction(action);
+    setShowPaymentMethodModal(true);
+  };
+
+  // Handle payment method selection and proceed
+  const handlePaymentMethodSelection = (method) => {
+    console.log("Payment method selected:", method, "for action:", currentAction);
+    setSelectedPaymentMethod(method);
+    setShowPaymentMethodModal(false);
+    
+    if (method === 'mpesa') {
+      // Small delay to ensure modal closes smoothly before opening bottom sheet
+      setTimeout(() => {
+        openPaymentSheet();
+      }, 500);
+    } else {
+      // For Flutterwave, prepare options and open bottom sheet
+      setTimeout(() => {
+        prepareFlutterwaveForAction(currentAction);
+      }, 300);
+    }
+  };
+
+  // Prepare Flutterwave options based on action
+  const prepareFlutterwaveForAction = (action) => {
+    console.log("Preparing Flutterwave options for action:", action);
+    setPaymentError(null); // Clear any previous errors
+    setFlutterwaveOptions(null); // Reset options to show loading state
+    
+    let targetPlan = selectedPlan;
+    
+    if (action === 'upgrade') {
+      targetPlan = 'yearly';
+    } else if (action === 'downgrade') {
+      targetPlan = 'monthly';
+    } else if (action === 'renew') {
+      targetPlan = currentPlan?.subscriptionType || selectedPlan;
+    }
+
+    console.log("Target plan for Flutterwave:", targetPlan);
+    
+    const options = prepareFlutterwaveOptionsForPlan(targetPlan, action);
+    if (options) {
+      console.log("Flutterwave options prepared successfully");
+      setFlutterwaveOptions(options);
+      // Open bottom sheet after options are set
+      setTimeout(() => {
+        console.log("Opening Flutterwave bottom sheet");
+        console.log("flutterwaveBottomSheetRef.current:", flutterwaveBottomSheetRef.current);
+        if (flutterwaveBottomSheetRef.current) {
+          console.log("Attempting to snapToIndex(0)");
+          flutterwaveBottomSheetRef.current?.snapToIndex(0);
+        } else {
+          console.error("flutterwaveBottomSheetRef.current is null!");
+        }
+      }, 100);
+    } else {
+      console.error("Failed to prepare Flutterwave options");
+      setPaymentError("Failed to prepare payment options");
+    }
+  };
+
+  // Prepare Flutterwave options for specific plan and action
+  const prepareFlutterwaveOptionsForPlan = (planType, action) => {
+    if (!userInfo || !userInfo.uid) {
+      setPaymentError("User information not available");
+      return null;
+    }
+
+    const selectedPlanData = plans[planType.toUpperCase()];
+    if (!selectedPlanData) {
+      setPaymentError("Selected plan not found");
+      return null;
+    }
+
+    const amount = getAmount(planType);
+    const currency = plans.currency || 'USD';
+
+    return {
+      tx_ref: `flaya_${userInfo.uid}_${Date.now()}`,
+      authorization: 'FLWPUBK-7da1fdeafd8af122aefde63095feef60-X',
+      customer: {
+        email: user.email,
+        phonenumber: userInfo.phoneNumber || '',
+        name: userInfo.username || 'Flaya User',
+      },
+      amount: amount,
+      currency: currency,
+      meta: {
+        consumer_id: userInfo.uid,
+        plan: planType,
+        action: action,
+        consumer_mac: "92a3-912ba-1192a",
+      },
+    };
   };
 
   // Show toast message
@@ -121,6 +232,8 @@ export default function SubscriptionComponent() {
     return currentPlan && currentPlan.subscriptionType === "monthly";
   };
 
+  const [paymentMethod, setPaymentMethod] = useState(null);
+
   // Check and get subscription status
   const subscriptionStatus = async () => {
     try {
@@ -133,10 +246,10 @@ export default function SubscriptionComponent() {
         return;
     }
 
-     // Get payment plans
+   
      const callbackPlans = httpsCallable(functions, 'getPaymentPlans');
      const responseplans = await callbackPlans({ userid: userinfo.uid });
-     console.log("payment plans", JSON.stringify(responseplans));
+    
 
      if (responseplans.data.plans) {
        setPlans(responseplans.data.plans);
@@ -173,12 +286,14 @@ export default function SubscriptionComponent() {
 
       // Always fetch the latest status from the backend
       const callbackFunction = httpsCallable(functions, 'getSubscriptionStatus');
-      const response = await callbackFunction({ userid: userinfo.uid });
+      const response = await callbackFunction({ userid: userinfo.uid, page: 'subscription' });
       
       // Store subscription data from the backend
       if (response.data.subscriptionType === null) {
         setIsSubscribed(false);
       } else {
+
+        setPaymentMethod(response.data.paymentMethod);
 
         
         setCurrentPlan(response.data);
@@ -187,8 +302,8 @@ export default function SubscriptionComponent() {
         console.log("current plan", JSON.stringify(response.data));
         
         // If the user was on monthly, pre-select monthly for simplicity
-        if (response.data.subscriptionType === "monthly") {
-          setSelectedPlan("monthly");
+        if (response.data.subscriptionType === null) {
+          setSelectedPlan(response.data.subscriptionType);
         }
       }
       // Listen for real-time updates from Firestore for UI refresh
@@ -203,7 +318,7 @@ export default function SubscriptionComponent() {
 
           console.log("payment response", paymentSuccess.current);
           // Refresh subscription status after payment
-          callbackFunction({ userid: userinfo.uid }).then(updatedResponse => {
+          callbackFunction({ userid: userinfo.uid, page: 'subscription' }).then(updatedResponse => {
             if (updatedResponse.data.subscriptionType !== null) {
               setCurrentPlan(updatedResponse.data);
               setIsSubscribed(true);
@@ -235,8 +350,32 @@ export default function SubscriptionComponent() {
     };
   }, []);
 
-  // Handle M-Pesa payment
-  const handlePayment = async (phoneNumber) => {
+  // Prepare Flutterwave options when payment method or plan changes
+  useEffect(() => {
+    if (selectedPaymentMethod === 'flutterwave' && userInfo && plans && selectedPlan) {
+      const options = prepareFlutterwaveOptions();
+      setFlutterwaveOptions(options);
+    }
+  }, [selectedPaymentMethod, selectedPlan, userInfo, plans]);
+
+  // Handle payment based on selected method
+  const handlePaymentMethod = async (phoneNumber = null) => {
+    try {
+      if (selectedPaymentMethod === 'mpesa') {
+        return await handleMpesaPayment(phoneNumber);
+      } else if (selectedPaymentMethod === 'flutterwave') {
+        // Flutterwave will be handled by the component
+        return true;
+      }
+    } catch (error) {
+      console.error("Payment method error:", error);
+      setPaymentError(error.message || "Payment failed. Please try again.");
+      return false;
+    }
+  };
+
+  // Handle M-Pesa payment for different actions
+  const handleMpesaPayment = async (phoneNumber) => {
     setIsProcessingPayment(true);
     setPaymentError(null);
     
@@ -247,31 +386,35 @@ export default function SubscriptionComponent() {
         throw new Error("User information not available");
       }
       
-      // When upgrading from monthly to yearly
-      const isUpgrading = isSubscribed && isUpgradeAvailable(currentPlan) && selectedPlan === "yearly";
+      let planType = selectedPlan;
+      let isUpgrade = false;
       
-      // Add plan information to the payment request
+      if (currentAction === 'upgrade') {
+        planType = 'yearly';
+        isUpgrade = true;
+      } else if (currentAction === 'downgrade') {
+        planType = 'monthly';
+        isUpgrade = true;
+      } else if (currentAction === 'renew') {
+        planType = currentPlan?.subscriptionType || selectedPlan;
+        isUpgrade = false;
+      }
+      
       const info = {
         userid: userInfo.uid,
         phone: phoneNumber,
-        plan: selectedPlan, // Pass selected plan to cloud function
-        isUpgrade: false // Tell backend if this is an upgrade
+        plan: planType,
+        isUpgrade: isUpgrade
       };
 
-      // Call the function with the payment info
       const response = await callbackFunction(info);
       console.log("payment response", JSON.stringify(response));
       
       if (response.data && (response.data.data && response.data.data.ResponseCode === "0" || response.data.ResponseCode === "0")) {
-        // Success case - M-Pesa request sent successfully
         paymentSuccess.current = true;
         showToast("Payment request sent to your phone. Please check your M-Pesa.");
-        
-        // Poll for subscription changes or wait for real-time updates
         return true;
       } else {
-        // Handle other response codes
-        console.log("Payment error", JSON.stringify(response));
         const errorMessage = response.data?.error || "Payment request failed. Please try again.";
         setPaymentError(errorMessage);
         throw new Error(errorMessage);
@@ -285,8 +428,117 @@ export default function SubscriptionComponent() {
     }
   };
 
-  const handleUpgradeToYearly = async () => {
+  const { user, logout } = useAuth();
+
+  const getAmount = (plan) => {
+    const selectedPlanData = plans[plan.toUpperCase()];
+    if (!selectedPlanData) {
+      setPaymentError("Selected plan not found");
+      return null;
+    }
+    const priceString = selectedPlanData.price.replace(/[^\d]/g, '');
+    const amount = parseInt(priceString);
+    return amount;
+  }
+
+  // Prepare Flutterwave payment options
+  const prepareFlutterwaveOptions = () => {
+    if (!userInfo || !userInfo.uid) {
+      setPaymentError("User information not available");
+      return null;
+    }
+
+    const selectedPlanData = plans[selectedPlan.toUpperCase()];
+    if (!selectedPlanData) {
+      setPaymentError("Selected plan not found");
+      return null;
+    }
+
+    // Extract price number from string (e.g., "Ksh 500" -> 500, "$ 4" -> 4)
+    const priceString = selectedPlanData.price.replace(/[^\d]/g, '');
+    const amount = parseInt(priceString);
+
+    // Use currency from plans data, fallback to USD if not available
+    const currency = plans.currency || 'USD';
+
+    return {
+      tx_ref: `flaya_${userInfo.uid}_${Date.now()}`,
+      authorization: 'FLWPUBK-7da1fdeafd8af122aefde63095feef60-X', // Replace with your public key
+      customer: {
+        email: user.email,
+        phonenumber: userInfo.phoneNumber || '',
+        name: userInfo.username || 'Flaya User',
+      },
+      amount: amount,
+      currency: currency,
+      meta: {
+        consumer_id: userInfo.uid,
+        plan: selectedPlan,
+        consumer_mac: "92a3-912ba-1192a",
+      },
+     
+    };
+  };
+
+  // Handle Flutterwave payment
+  const handleFlutterwavePayment = async () => {
+    setIsProcessingPayment(true);
+    setPaymentError(null);
     
+    try {
+      const options = prepareFlutterwaveOptions();
+      if (options) {
+        setFlutterwaveOptions(options);
+      }
+    } catch (error) {
+      console.error("Error preparing Flutterwave payment:", error);
+      setPaymentError(error.message || "Failed to prepare payment. Please try again.");
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  // Handle Flutterwave payment response
+  const onFlutterwaveRedirect = async (data) => {
+    setIsProcessingPayment(true);
+    console.log("Flutterwave response:", data);
+
+    try {
+      if (data.status === 'successful') {
+        // Payment successful, verify on backend
+        const verifyFunction = httpsCallable(functions, 'verifyFlutterwavePayment');
+        const verificationResponse = await verifyFunction({
+          transaction_id: data.transaction_id,
+          tx_ref: data.tx_ref,
+          userid: userInfo.uid,
+          plan: selectedPlan
+        });
+
+        if (verificationResponse.data.success) {
+          paymentSuccess.current = true;
+          // close flutterwave bottom sheet
+          flutterwaveBottomSheetRef.current?.close();
+          showToast("Payment successful! Your subscription is now active.");
+          setPaymentError(null);
+        } else {
+          throw new Error("Payment verification failed");
+        }
+      } else if (data.status === 'cancelled') {
+        showToast("Payment was cancelled");
+        setPaymentError("Payment was cancelled by user");
+      } else {
+        throw new Error(data.message || "Payment failed");
+      }
+    } catch (error) {
+      console.error("Flutterwave payment error:", error);
+      setPaymentError(error.message || "Payment failed. Please try again.");
+      showToast("Payment failed. Please try again.");
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handleUpgradeToYearly = async () => {
     Alert.alert(
       'Upgrade to Yearly Plan',
       'Would you like to upgrade to the yearly plan? You will get a 20% discount and your remaining days from the monthly plan will be credited.',
@@ -294,42 +546,15 @@ export default function SubscriptionComponent() {
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Upgrade', 
-          onPress: async () => {
-            try {
-              setIsProcessingPayment(true);
-              
-              const callbackFunction = httpsCallable(functions, 'mpesaPush');
-              const response = await callbackFunction({
-                userid: userInfo.uid,
-                phone: currentPlan.lastPaymentDetails.phoneNumber,
-                plan: 'yearly',
-                isUpgrade: true
-              });
-              
-              if (response.data.success) {
-                showToast("Upgrade initiated. Please check your M-Pesa for payment instructions.");
-                paymentSuccess.current = true;
-              } else {
-                showToast(response.data.message || 'Failed to initiate upgrade payment');
-              }
-            } catch (error) {
-              console.error('Upgrade error:', error);
-              Alert.alert('Error', error.message || 'An error occurred while processing your upgrade');
-            } finally {
-              setIsProcessingPayment(false);
-              
-              // Refresh subscription data after payment attempt
-              setTimeout(subscriptionStatus, 5000);
-            }
+          onPress: () => {
+            openPaymentMethodModal('upgrade');
           }
         }
       ]
     );
   };
 
-  const handleDownGradeToMonhly = async () => {
-    
-    
+  const handleDownGradeToMonthly = async () => {
     Alert.alert(
       'Downgrade to Monthly Plan',
       'Would you like to downgrade to the monthly plan? You will lose the benefits of the yearly plan and your remaining days from the yearly plan will be credited.',
@@ -337,33 +562,8 @@ export default function SubscriptionComponent() {
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Downgrade', 
-          onPress: async () => {
-            try {
-              setIsProcessingPayment(true);
-              
-              const callbackFunction = httpsCallable(functions, 'mpesaPush');
-              const response = await callbackFunction({
-                userid: userInfo.uid,
-                phone: currentPlan.lastPaymentDetails.phoneNumber,
-                plan: 'monthly',
-                isUpgrade: true
-              });
-              
-              if (response.data.success) {
-                showToast("Downgrade initiated. Please check your M-Pesa for payment instructions.");
-                paymentSuccess.current = true;
-              } else {
-                showToast(response.data.message || 'Failed to initiate downgrade payment');
-              }
-            } catch (error) {
-              console.error('Upgrade error:', error);
-              Alert.alert('Error', error.message || 'An error occurred while processing your upgrade');
-            } finally {
-              setIsProcessingPayment(false);
-              
-              // Refresh subscription data after payment attempt
-              setTimeout(subscriptionStatus, 5000);
-            }
+          onPress: () => {
+            openPaymentMethodModal('downgrade');
           }
         }
       ]
@@ -382,6 +582,78 @@ export default function SubscriptionComponent() {
     border: isDark ? '#333333' : '#DDDDDD',
     success: '#4CAF50'
   };
+
+  // Flutterwave Payment Bottom Sheet Component
+ 
+  // Payment Method Selection Modal Component
+  const PaymentMethodModal = () => (
+    <Modal
+      visible={showPaymentMethodModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowPaymentMethodModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Choose Payment Method
+            </Text>
+            <TouchableOpacity 
+              onPress={() => setShowPaymentMethodModal(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.paymentOptionsContainer}>
+            <TouchableOpacity
+              style={[styles.paymentOption, { borderColor: colors.border }]}
+              onPress={() => handlePaymentMethodSelection('mpesa')}
+            >
+              <View style={styles.paymentOptionContent}>
+                <Image 
+                  source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/1/15/M-PESA_LOGO-01.svg' }}
+                  style={styles.paymentOptionIcon}
+                  resizeMode="contain"
+                />
+                <View style={styles.paymentOptionText}>
+                  <Text style={[styles.paymentOptionTitle, { color: colors.text }]}>
+                    M-Pesa
+                  </Text>
+                  <Text style={[styles.paymentOptionSubtitle, { color: colors.subtext }]}>
+                    Pay with your mobile money
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.paymentOption, { borderColor: colors.border }]}
+              onPress={() => handlePaymentMethodSelection('flutterwave')}
+            >
+              <View style={styles.paymentOptionContent}>
+                <View style={[styles.flutterwaveModalIcon, { backgroundColor: '#f5a623' }]}>
+                  <Text style={styles.flutterwaveModalIconText}>FW</Text>
+                </View>
+                <View style={styles.paymentOptionText}>
+                  <Text style={[styles.paymentOptionTitle, { color: colors.text }]}>
+                    Other Payment Methods
+                  </Text>
+                  <Text style={[styles.paymentOptionSubtitle, { color: colors.subtext }]}>
+                    Card, Mobile Money, Bank Transfer
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (isSubscribed === null) {
     return (
@@ -407,109 +679,220 @@ export default function SubscriptionComponent() {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1 }}>
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <ScrollView 
+            style={[styles.container, { backgroundColor: colors.background }]}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+          >
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => router.back()}>
+                <Image 
+                  style={{
+                    width: 20, 
+                    height: 20, 
+                    tintColor: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main
+                  }} 
+                  source={require('@/assets/icons/arrow.png')}
+                />
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { color: colors.text, fontSize: 18 , marginLeft: 10}]}>
+                 Subscription
+              </Text>
+              <View style={{ width: 20 }} />
+            </View>
 
+            {/* Current Plan Card */}
             <View style={[styles.currentPlanCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.currentPlanHeader}>
-
-                 <TouchableOpacity onPress={() => router.back()} >
-                   <Image style={{width:20,height:20,tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}} source={require('@/assets/icons/arrow.png')}></Image>
-                  </TouchableOpacity>
-
-                <Text style={[styles.currentPlanTitle, { color: colors.text }]}>Current Subscription</Text>
-                <View style={[styles.activeBadge, { 
-                  backgroundColor: currentPlan.status === "active" ? colors.success + '20' : Colors.red_orange + '20' 
-                }]}>
-                  <Text style={[styles.activeBadgeText, { 
-                    color: currentPlan.status === "active" ? colors.success : Colors.red_orange 
+              {/* Plan Status Header */}
+              <View style={styles.planStatusHeader}>
+                <View style={styles.planIconContainer}>
+                  <Ionicons 
+                    name="diamond" 
+                    size={24} 
+                    color={currentPlan.status === "active" ? colors.success : Colors.red_orange} 
+                  />
+                </View>
+                <View style={styles.planStatusInfo}>
+                  <Text style={[styles.planStatusTitle, { color: colors.text }]}>
+                    {currentPlan.plan}
+                  </Text>
+                  <View style={[styles.statusBadge, { 
+                    backgroundColor: currentPlan.status === "active" ? colors.success + '20' : Colors.red_orange + '20' 
                   }]}>
-                    {currentPlan.status === "active" ? "Active" : "Expired"}
-                  </Text>
+                    <View style={[styles.statusDot, {
+                      backgroundColor: currentPlan.status === "active" ? colors.success : Colors.red_orange
+                    }]} />
+                    <Text style={[styles.statusText, { 
+                      color: currentPlan.status === "active" ? colors.success : Colors.red_orange 
+                    }]}>
+                      {currentPlan.status === "active" ? "Active" : "Expired"}
+                    </Text>
+                  </View>
                 </View>
             </View>
             
-            <View style={styles.planInfoRow}>
-                <Ionicons name="storefront-outline" size={24} color={Colors.blue} />
-                <Text style={[styles.planInfoText, { color: colors.text }]}>{currentPlan.plan}</Text>
+              {/* Plan Details */}
+              <View style={styles.planDetailsContainer}>
+                <View style={styles.planDetailRow}>
+                  <View style={styles.planDetailIcon}>
+                    <Ionicons name="calendar-outline" size={20} color={colors.accent} />
+                  </View>
+                  <View style={styles.planDetailContent}>
+                    <Text style={[styles.planDetailLabel, { color: colors.subtext }]}>
+                      {message}
+                    </Text>
+                    <Text style={[styles.planDetailValue, { color: colors.text }]}>
+                      { currentPlan.period === "grace_period" ? currentPlan.expiryDate : currentPlan.endDate}
+                    </Text>
+                  </View>
             </View>
             
-            <View style={styles.planInfoRow}>
-                <Ionicons name="calendar-outline" size={24} color={Colors.blue} />
-                <Text style={[styles.planInfoText, { color: colors.text }]}>
-                 {message} {currentPlan.endDate}
+                {currentPlan.period === "safe_period" && currentPlan.days > 0 && (
+                  <View style={styles.planDetailRow}>
+                    <View style={styles.planDetailIcon}>
+                      <Ionicons 
+                        name="time-outline" 
+                        size={20} 
+                        color={currentPlan.days <= 5 ? Colors.red_orange : colors.accent} 
+                      />
+                    </View>
+                    <View style={styles.planDetailContent}>
+                      <Text style={[styles.planDetailLabel, { color: colors.subtext }]}>
+                        Time Remaining
+                      </Text>
+                      <Text style={[
+                        styles.planDetailValue, 
+                        { 
+                          color: currentPlan.days <= 5 ? Colors.red_orange : colors.text,
+                          fontWeight: currentPlan.days <= 5 ? '600' : 'normal'
+                        }
+                      ]}>
+                        {currentPlan.days} days
                 </Text>
-            </View>
-
-              {currentPlan.period === "safe_period" && currentPlan.days > 0 && (
-                <View style={styles.planInfoRow}>
-                  <Ionicons name="time-outline" size={24} color={currentPlan.days <= 5 ? Colors.red_orange : Colors.blue} />
-                  <Text style={[
-                    styles.planInfoText, 
-                    { 
-                      color: currentPlan.days <= 5 ? Colors.red_orange : colors.text,
-                      fontWeight: currentPlan.days <= 5 ? '600' : 'normal'
-                    }
-                  ]}>
-                    {currentPlan.days} days remaining
-                  </Text>
-                </View>
-              )}
-            
-            <View style={styles.benefitsContainer}>
-                <Text style={[styles.benefitsTitle, { color: colors.text }]}>Your Benefits</Text>
-                
-                <View style={styles.benefitRow}>
-                  <Ionicons name="location-outline" size={24} color={Colors.green} />
-                <Text style={[styles.benefitText, { color: colors.text }]}>{plans.features[0]}</Text>
-                </View>
-                
-                <View style={styles.benefitRow}>
-                  <Ionicons name="cube-outline" size={24} color={colors.text} />
-                <Text style={[styles.benefitText, { color: colors.text }]}>{plans.features[1]}</Text>
-                </View>
-                
-                <View style={styles.benefitRow}>
-                  <Ionicons name="notifications-outline" size={24} color={colors.text} />
-                <Text style={[styles.benefitText, { color: colors.text }]}>{plans.features[2]}</Text>
-                </View>
+                    </View>
+                  </View>
+                )}
             </View>
             
-              {showRenewButton && (
-                <TouchableOpacity
-                  style={[styles.renewButton, { backgroundColor: Colors.blue }]}
-                  onPress={openPaymentSheet}>
-                  <Ionicons name="refresh" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                  <Text style={styles.renewButtonText}>
-                    {getRenewButtonText(currentPlan)}
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-
-             {(showRenewButton && currentPlan.subscriptionType === "yearly") && (
-                <TouchableOpacity
-                  style={[styles.buttonOutline, { borderColor: colors.border }]}
-                  onPress={handleDownGradeToMonhly}>
-                  <Text style={[styles.buttonOutlineText, { color: colors.text }]}>Downgrade to Monthly Plan</Text>
-                </TouchableOpacity>
-              )}
-
-              {shouldShowChangePlan && (
+              {/* Benefits Section */}
+              <View style={styles.benefitsSection}>
+                <Text style={[styles.benefitsSectionTitle, { color: colors.text }]}>
+                  Your Benefits
+                </Text>
+                <View style={styles.benefitsList}>
+                  <View style={styles.benefitItem}>
+                    <View style={[styles.benefitIcon, { backgroundColor: colors.success + '20' }]}>
+                      <Ionicons name="location" size={16} color={colors.success} />
+                    </View>
+                    <Text style={[styles.benefitText, { color: colors.text }]}>
+                      Store visible to people nearby
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.benefitItem}>
+                    <View style={[styles.benefitIcon, { backgroundColor: colors.accent + '20' }]}>
+                      <Ionicons name="notifications" size={16} color={colors.accent} />
+                    </View>
+                    <Text style={[styles.benefitText, { color: colors.text }]}>
+                      Receive and manage orders
+                    </Text>
+                </View>
+                
+                  <View style={styles.benefitItem}>
+                    <View style={[styles.benefitIcon, { backgroundColor: Colors.blue + '20' }]}>
+                      <Ionicons name="cube" size={16} color={Colors.blue} />
+                    </View>
+                    <Text style={[styles.benefitText, { color: colors.text }]}>
+                      Post unlimited products
+                    </Text>
+                </View>
+                
+                  <View style={styles.benefitItem}>
+                    <View style={[styles.benefitIcon, { backgroundColor: Colors.green + '20' }]}>
+                      <Ionicons name="analytics" size={16} color={Colors.green} />
+                    </View>
+                    <Text style={[styles.benefitText, { color: colors.text }]}>
+                      Business insights
+                    </Text>
+                  </View>
+                </View>
+            </View>
+            
+              {/* Action Buttons */}
+              <View style={styles.actionButtonsContainer}>
+                {showRenewButton && (
             <TouchableOpacity
-                style={[styles.buttonOutline, { borderColor: colors.border }]}
-                  onPress={handleUpgradeToYearly}>
-                  <Text style={[styles.buttonOutlineText, { color: colors.text }]}>Upgrade to Yearly Plan</Text>
+                    style={[styles.primaryActionButton, { backgroundColor: colors.accent }]}
+                    onPress={() => openPaymentMethodModal('renew')}
+                    disabled={isProcessingPayment}
+                  >
+                    {isProcessingPayment ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="refresh" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.primaryActionButtonText}>
+                          {getRenewButtonText(currentPlan)}
+                        </Text>
+                      </>
+                    )}
             </TouchableOpacity>
-              )}
-            </View>
-      </View>
+                )}
+        
+                {shouldShowChangePlan && (
+        <TouchableOpacity
+                    style={[styles.secondaryActionButton, { borderColor: colors.border }]}
+                    onPress={handleUpgradeToYearly}
+                    disabled={isProcessingPayment}
+                  >
+                    <Ionicons name="arrow-up-circle-outline" size={20} color={colors.accent} style={{ marginRight: 8 }} />
+                    <Text style={[styles.secondaryActionButtonText, { color: colors.accent }]}>
+                      Upgrade to Yearly Plan
+                    </Text>
+        </TouchableOpacity>
+                )}
 
-          <PhoneInputBottomSheet 
-            handleButtonPress={handlePayment} 
-            bottomSheetRef={bottomSheetRef} 
-            initialSnapIndex={-1} 
-            snapPoints={snapPoints} 
+                {(showRenewButton && currentPlan.subscriptionType === "yearly") && (
+                  <TouchableOpacity
+                    style={[styles.secondaryActionButton, { borderColor: colors.border }]}
+                    onPress={handleDownGradeToMonthly}
+                    disabled={isProcessingPayment}
+                  >
+                    <Ionicons name="arrow-down-circle-outline" size={20} color={colors.subtext} style={{ marginRight: 8 }} />
+                    <Text style={[styles.secondaryActionButtonText, { color: colors.text }]}>
+                      Downgrade to Monthly Plan
+                    </Text>
+                  </TouchableOpacity>
+                )}
+      </View>
+            </View>
+          </ScrollView>
+
+          {/* Payment Method Modal */}
+          <PaymentMethodModal />
+
+          {/* Flutterwave Payment Bottom Sheet */}
+          <FlutterwavePaymentBottomSheet
+            bottomSheetRef={flutterwaveBottomSheetRef}
+            snapPoints={snapPoints}
+            colors={colors}
+            currentAction={currentAction}
+            paymentError={paymentError}
+            flutterwaveOptions={flutterwaveOptions}
+            isProcessingPayment={isProcessingPayment}
+            onFlutterwaveRedirect={onFlutterwaveRedirect}
           />
+
+          {/* M-Pesa Bottom Sheet */}
+          {(
+            <PhoneInputBottomSheet 
+              handleButtonPress={handlePaymentMethod} 
+              bottomSheetRef={bottomSheetRef} 
+              initialSnapIndex={-1} 
+              snapPoints={snapPoints} 
+            />
+          )}
         </SafeAreaView>
       </GestureHandlerRootView>
     );
@@ -519,37 +902,54 @@ export default function SubscriptionComponent() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-
-            <View style={{flexDirection:'row',alignItems:'center'}}>
-
-            <TouchableOpacity onPress={() => router.back()} style={{marginLeft:10}} >
-            <Image style={{width:20,height:20,tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}} source={require('@/assets/icons/arrow.png')}></Image>
+        <ScrollView 
+          style={[styles.container, { backgroundColor: colors.background }]}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Image 
+                style={{
+                  width: 20, 
+                  height: 20, 
+                  tintColor: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main
+                }} 
+                source={require('@/assets/icons/arrow.png')}
+              />
             </TouchableOpacity>
+            {(plans && plans.title) && (
+              <Text style={[styles.headerTitle, { color: colors.text , fontSize: 18, marginLeft: 10}]}>
+                {plans.title}
+              </Text>
+            )}
+            <View style={{ width: 20 }} />
+          </View>
 
-            { (plans && plans.title) && <Text style={[styles.title, { color: colors.text, marginLeft:10 , marginBottom:0}]}>{plans.title}</Text>}
-            </View>
-
-
-        
-            {(plans && plans.message) && <Text style={[styles.subtitle, { color: colors.subtext }]}>
-                {plans.message}
-            </Text>}
+          {/* Subtitle */}
+          {(plans && plans.message) && (
+            <Text style={[styles.subtitle, { color: colors.subtext }]}>
+              {plans.message}
+            </Text>
+          )}
             
-            {/* Plan toggle buttons */}
-            {plans && plans.MONTHLY && plans.YEARLY && (
+          {/* Plan toggle buttons */}
+          {plans && plans.MONTHLY && plans.YEARLY && (
             <View style={styles.planToggle}>
                 <TouchableOpacity
                 style={[
                     styles.planToggleButton,
-                    selectedPlan === plans.MONTHLY.id && [styles.planToggleButtonActive, { backgroundColor: colors.activeCard }]
+                  selectedPlan === plans.MONTHLY.id && [styles.planToggleButtonActive, { backgroundColor: colors.activeCard }]
                 ]}
-                  onPress={() => setSelectedPlan(plans.MONTHLY.id)}>
+                onPress={() => setSelectedPlan(plans.MONTHLY.id)}
+              >
                 <Text
                     style={[
                     styles.planToggleText,
-                      { color: selectedPlan === plans.MONTHLY.id ? colors.accent : colors.subtext }
-                    ]}>
+                    { color: selectedPlan === plans.MONTHLY.id ? colors.accent : colors.subtext }
+                  ]}
+                >
                     Monthly
                 </Text>
                 </TouchableOpacity>
@@ -557,85 +957,196 @@ export default function SubscriptionComponent() {
                 <TouchableOpacity
                 style={[
                     styles.planToggleButton,
-                    selectedPlan === plans.YEARLY.id && [styles.planToggleButtonActive, { backgroundColor: colors.activeCard }]
+                  selectedPlan === plans.YEARLY.id && [styles.planToggleButtonActive, { backgroundColor: colors.activeCard }]
                 ]}
-                  onPress={() => setSelectedPlan(plans.YEARLY.id)}>
+                onPress={() => setSelectedPlan(plans.YEARLY.id)}
+              >
                 <Text
                     style={[
                     styles.planToggleText,
-                      { color: selectedPlan === plans.YEARLY.id ? colors.accent : colors.subtext }
-                    ]}>
+                    { color: selectedPlan === plans.YEARLY.id ? colors.accent : colors.subtext }
+                  ]}
+                >
                     Yearly
                 </Text>
-                  {plans.YEARLY.savings && (
+                {plans.YEARLY.savings && (
                     <View style={[styles.savingsBadge, { backgroundColor: colors.accent + '20' }]}>
-                      <Text style={[styles.savingsBadgeText, { color: colors.accent }]}>Save {plans.YEARLY.savings}</Text>
+                    <Text style={[styles.savingsBadgeText, { color: colors.accent }]}>
+                      Save {plans.YEARLY.savings}
+                    </Text>
                     </View>
                 )}
                 </TouchableOpacity>
             </View>
-            )}
-            
-            {/* Plan details card */}
-            {plans && plans.MONTHLY && plans.YEARLY && (
+          )}
+          
+          {/* Payment Method Selection */}
+          {plans && plans.MONTHLY && plans.YEARLY && (
+            <View style={[styles.paymentMethodContainer, { backgroundColor: colors.card }]}>
+              <Text style={[styles.paymentMethodTitle, { color: colors.text }]}>
+                Choose Payment Method
+              </Text>
+              
+              <View style={styles.paymentMethodToggle}>
+                <TouchableOpacity
+                  style={[
+                    styles.paymentMethodButton,
+                    selectedPaymentMethod === 'mpesa' && [styles.paymentMethodButtonActive, { backgroundColor: colors.accent + '20' }]
+                  ]}
+                  onPress={() => setSelectedPaymentMethod('mpesa')}
+                >
+                  <View style={styles.paymentMethodContent}>
+                    <Image 
+                      source={require('@/assets/icons/mpesa_icon.png')}
+                      style={styles.paymentMethodIcon}
+                      resizeMode="contain"
+                    />
+                    <Text style={[
+                      styles.paymentMethodText,
+                      { color: selectedPaymentMethod === 'mpesa' ? colors.accent : colors.text }
+                    ]}>
+                      M-Pesa
+                    </Text>
+                  </View>
+                  {selectedPaymentMethod === 'mpesa' && (
+                    <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
+                  )}
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.paymentMethodButton,
+                    selectedPaymentMethod === 'flutterwave' && [styles.paymentMethodButtonActive, { backgroundColor: colors.accent + '20' }]
+                  ]}
+                  onPress={() => setSelectedPaymentMethod('flutterwave')}
+                >
+                  <View style={styles.paymentMethodContent}>
+                    <View style={[styles.flutterwaveIcon, { backgroundColor: '#f5a623' }]}>
+                      <Text style={styles.flutterwaveIconText}>FW</Text>
+                    </View>
+                    <View>
+                      <Text style={[
+                        styles.paymentMethodText,
+                        { color: selectedPaymentMethod === 'flutterwave' ? colors.accent : colors.text }
+                      ]}>
+                        Other Payment Methods
+                      </Text>
+                      <Text style={[styles.paymentMethodSubtext, { color: colors.subtext }]}>
+                        Card, Mobile Money, Bank
+                      </Text>
+                    </View>
+                  </View>
+                  {selectedPaymentMethod === 'flutterwave' && (
+                    <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          
+          {/* Plan details card */}
+          {plans && plans.MONTHLY && plans.YEARLY && (
             <View style={[styles.planCard, { backgroundColor: colors.card }]}>
                 <Text style={[styles.planName, { color: colors.text }]}>
-                  {selectedPlan === plans.MONTHLY.id ? plans.MONTHLY.name : plans.YEARLY.name}
+                {selectedPlan === plans.MONTHLY.id ? plans.MONTHLY.name : plans.YEARLY.name}
                 </Text>
                 
                 <View style={styles.priceContainer}>
                 <Text style={[styles.price, { color: colors.text }]}>
-                    {selectedPlan === plans.MONTHLY.id ? plans.MONTHLY.price : plans.YEARLY.price}
+                  {selectedPlan === plans.MONTHLY.id ? plans.MONTHLY.price : plans.YEARLY.price}
                 </Text>
                 <Text style={[styles.period, { color: colors.subtext }]}>
-                    /{selectedPlan === plans.MONTHLY.id ? plans.MONTHLY.period : plans.YEARLY.period}
+                  /{selectedPlan === plans.MONTHLY.id ? plans.MONTHLY.period : plans.YEARLY.period}
                 </Text>
                 </View>
                 
                 <View style={styles.featuresContainer}>
-                  {(selectedPlan === plans.MONTHLY.id ? plans.MONTHLY.features : plans.YEARLY.features)?.map((feature, index) => (
+                {(selectedPlan === plans.MONTHLY.id ? plans.MONTHLY.features : plans.YEARLY.features)?.map((feature, index) => (
                     <View key={index} style={styles.featureRow}>
-                      <Ionicons name="checkmark-circle" size={20} color={Colors.green} />
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.green} />
                     <Text style={[styles.featureText, { color: colors.text }]}>{feature}</Text>
                     </View>
                 ))}
                 </View>
-
-                {/* Show error if payment failed */}
-                {paymentError && (
-                  <View style={styles.errorContainer}>
-                    <Ionicons name="alert-circle" size={20} color={Colors.red_orange} style={styles.errorIcon} />
-                    <Text style={[styles.errorText, { color: Colors.red_orange }]}>{paymentError}</Text>
-                  </View>
-                )}
                 
+              {/* Show error if payment failed */}
+              {paymentError && (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={20} color={Colors.red_orange} style={styles.errorIcon} />
+                  <Text style={[styles.errorText, { color: Colors.red_orange }]}>{paymentError}</Text>
+                </View>
+              )}
+              
+              {/* Conditional rendering based on payment method */}
+              {selectedPaymentMethod === 'mpesa' ? (
                 <TouchableOpacity
                 style={[styles.subscribeButton, { backgroundColor: colors.accent }]}
                   onPress={openPaymentSheet}
-                  disabled={isProcessingPayment}>
+                  disabled={isProcessingPayment}
+                >
                   {isProcessingPayment ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <>
-                      <Ionicons name="card-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.subscribeButtonText}>Subscribe Now</Text>
+                      <Ionicons 
+                        name="phone-portrait-outline" 
+                        size={22} 
+                        color="#FFFFFF" 
+                        style={{ marginRight: 8 }} 
+                      />
+                      <Text style={styles.subscribeButtonText}>
+                        Pay with M-Pesa
+                      </Text>
                     </>
                   )}
                 </TouchableOpacity>
+              ) : (
+                flutterwaveOptions && (
+                  <PayWithFlutterwave
+                    onRedirect={onFlutterwaveRedirect}
+                    options={flutterwaveOptions}
+                    customButton={(props) => (
+                      <TouchableOpacity
+                        style={[styles.subscribeButton, { backgroundColor: colors.accent }]}
+                        onPress={props.onPress}
+                        disabled={props.disabled || isProcessingPayment}
+                      >
+                        {isProcessingPayment ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <>
+                            <Ionicons 
+                              name="card-outline" 
+                              size={22} 
+                              color="#FFFFFF" 
+                              style={{ marginRight: 8 }} 
+                             />
+                            <Text style={styles.subscribeButtonText}>
+                              Pay with Flutterwave
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  />
+                )
+              )}
             </View>
-            )}
+          )}
             
             <Text style={[styles.termsText, { color: colors.subtext }]}>
                 You can cancel your subscription at any time
             </Text>
-            </View>
-    
-        <PhoneInputBottomSheet 
-          handleButtonPress={handlePayment} 
-          bottomSheetRef={bottomSheetRef} 
-          initialSnapIndex={-1} 
-          snapPoints={snapPoints} 
-        />
+        </ScrollView>
+
+        {selectedPaymentMethod === 'mpesa' && (
+          <PhoneInputBottomSheet 
+            handleButtonPress={handlePaymentMethod} 
+            bottomSheetRef={bottomSheetRef} 
+            initialSnapIndex={-1} 
+            snapPoints={snapPoints} 
+          />
+        )}
         </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -833,5 +1344,259 @@ const styles = StyleSheet.create({
   planDaysWarning: {
     color: Colors.red_orange,
     fontWeight: '600',
+  },
+  paymentMethodContainer: {
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 24,
+  },
+  paymentMethodTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  paymentMethodToggle: {
+    flexDirection: 'column',
+    gap: 12,
+  },
+  paymentMethodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  paymentMethodButtonActive: {
+    borderWidth: 1,
+  },
+  paymentMethodContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentMethodIcon: {
+    width: 24,
+    height: 24,
+    marginRight: 12,
+  },
+  paymentMethodText: {
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  paymentMethodSubtext: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  flutterwaveIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  flutterwaveIconText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    padding: 24,
+    borderRadius: 16,
+    width: '80%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  paymentOptionsContainer: {
+    gap: 12,
+  },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: 12,
+  },
+  paymentOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentOptionIcon: {
+    width: 24,
+    height: 24,
+    marginRight: 12,
+  },
+  paymentOptionText: {
+    flex: 1,
+  },
+  paymentOptionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  paymentOptionSubtitle: {
+    fontSize: 12,
+  },
+  flutterwaveModalIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  flutterwaveModalIconText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  planStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  planIconContainer: {
+    marginRight: 12,
+  },
+  planStatusInfo: {
+    flex: 1,
+  },
+  planStatusTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+    borderRadius: 12,
+  },
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  planDetailsContainer: {
+    marginBottom: 24,
+  },
+  planDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  planDetailIcon: {
+    marginRight: 12,
+  },
+  planDetailContent: {
+    flex: 1,
+  },
+  planDetailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  planDetailValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  benefitsSection: {
+    marginBottom: 24,
+  },
+  benefitsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  benefitsList: {
+    gap: 8,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  benefitIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  actionButtonsContainer: {
+    gap: 12,
+    marginTop: 16,
+  },
+  primaryActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    width: '100%',
+  },
+  primaryActionButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  secondaryActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    width: '100%',
+  },
+  secondaryActionButtonText: {
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  bottomSheetContent: {
+    padding: 24,
+  },
+  bottomSheetTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  bottomSheetSubtitle: {
+    fontSize: 14,
   },
 });

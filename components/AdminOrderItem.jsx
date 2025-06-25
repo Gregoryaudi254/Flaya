@@ -160,37 +160,60 @@ const AdminOrderItem = ({
       </View>
       
       <View style={styles.orderDetailsContainer}>
-        <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>
-          Order Details
-        </Text>
-        
-        <Text style={[styles.description, { color: isDark ? '#DDDDDD' : '#333333' }]}>
-          {item.description}
-        </Text>
-      </View>
-      
-      <View style={styles.contactContainer}>
-        <View style={styles.contactRow}>
-          <Ionicons name="call-outline" size={18} color={isDark ? '#AAAAAA' : '#666666'} />
-          <Text 
-            style={[styles.contactText, { color: isDark ? '#DDDDDD' : '#333333' }]}
-            onPress={() => handleCallPress(item.phoneNumber)}
-          >
-            {item.phoneNumber}
+        <View style={styles.sectionHeader}>
+          <Ionicons name="receipt-outline" size={18} color={isDark ? Colors.light_main : Colors.dark_main} />
+          <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>
+            Order Details
           </Text>
         </View>
         
-        {item.address && (
-          <View style={styles.contactRow}>
-            <Ionicons name="location-outline" size={18} color={isDark ? '#AAAAAA' : '#666666'} />
-            <Text 
-              style={[styles.contactText, styles.addressText, { color: isDark ? '#DDDDDD' : '#333333' }]}
-              numberOfLines={2}
-            >
-              {item.address}
-            </Text>
-          </View>
-        )}
+        <View style={[styles.descriptionCard, { backgroundColor: isDark ? '#2A2A2A' : '#F8F9FA' }]}>
+          <Text style={[styles.description, { color: isDark ? '#DDDDDD' : '#333333' }]}>
+            {item.description}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.contactContainer}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="person-outline" size={18} color={isDark ? Colors.light_main : Colors.dark_main} />
+          <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>
+            Contact Information
+          </Text>
+        </View>
+        
+        <View style={[styles.contactCard, { backgroundColor: isDark ? '#2A2A2A' : '#F8F9FA' }]}>
+          <TouchableOpacity 
+            style={styles.phoneRow}
+            onPress={() => handleCallPress(item.phoneNumber)}
+          >
+            <View style={styles.contactRowContent}>
+              <View style={[styles.iconContainer, { backgroundColor: Colors.green + '20' }]}>
+                <Ionicons name="call" size={16} color={Colors.green} />
+              </View>
+              <Text style={[styles.phoneNumber, { color: Colors.green }]}>
+                {item.phoneNumber}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={isDark ? '#AAAAAA' : '#666666'} />
+          </TouchableOpacity>
+          
+          {item.address && (
+            <View style={styles.addressRow}>
+              <View style={styles.contactRowContent}>
+                <View style={[styles.iconContainer, { backgroundColor: Colors.blue + '20' }]}>
+                  <Ionicons name="location" size={16} color={Colors.blue} />
+                </View>
+                <Text 
+                  style={[styles.addressText, { color: isDark ? '#DDDDDD' : '#333333' }]}
+                  numberOfLines={2}
+                >
+                  {item.address}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
       </View>
       
       <View style={styles.actionsContainer}>
@@ -332,10 +355,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 12,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '600',
-    marginBottom: 8,
+    marginLeft: 8,
+  },
+  descriptionCard: {
+    padding: 12,
+    borderRadius: 8,
   },
   description: {
     fontSize: 15,
@@ -344,17 +376,38 @@ const styles = StyleSheet.create({
   contactContainer: {
     marginBottom: 16,
   },
-  contactRow: {
+  contactCard: {
+    padding: 12,
+    borderRadius: 8,
+  },
+  phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-between',
   },
-  contactText: {
+  contactRowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  phoneNumber: {
     fontSize: 14,
-    marginLeft: 8,
+    fontWeight: '600',
+  },
+  addressRow: {
+    marginTop: 8,
   },
   addressText: {
     flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
   },
   actionsContainer: {
     flexDirection: 'row',

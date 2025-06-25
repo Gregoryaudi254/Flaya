@@ -62,8 +62,8 @@ const oppuserprofile = () => {
 
     const [refreshing, setRefreshing] = useState(true);
     const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
-
     
+
     const getUserInfo = async () => {
 
        const currentuserInfo = await getData('@profile_info')
@@ -638,7 +638,7 @@ const oppuserprofile = () => {
       }) 
     
 
-   
+
 
   return (
 

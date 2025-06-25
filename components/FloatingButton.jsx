@@ -13,7 +13,7 @@ const FloatingButton = ({ onPress, isVisible, isHomePage = false }) => {
   }, [isVisible]);
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ scale: scaleValue }]} ,isHomePage ? {top:50} : {bottom:50}]}>
+    <Animated.View style={[styles.container, { transform: [{ scale: scaleValue }]} ,isHomePage ? {top:50} : {bottom:80}]}>
       <TouchableOpacity style={styles.button} onPress={onPress}>
         <Ionicons name={isHomePage ? "arrow-up-circle" : "arrow-down-circle"} size={40} color="#fff" />
       </TouchableOpacity>

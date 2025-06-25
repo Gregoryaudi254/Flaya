@@ -1365,6 +1365,65 @@ async function deleteBusiness(userid, businessid) {
   return "Deleted";
 } 
 
+
+  exports.onBusinessUpdate = functions.firestore
+  .document("locationchanges/{userid}")
+  .onUpdate(async (snapshot, context) => {
+    const userid = context.params.userid;
+    const beforeData = snapshot.before.data();
+    const afterData = snapshot.after.data();
+
+    // Check if status changed from 'pending' to 'approved' or 'denied'
+    if (beforeData.status === "pending" && (afterData.status === "approved" || afterData.status === "denied")) {
+      if (afterData.status === "approved") {
+        // Approve the location change
+        try {
+          // Update coordinates in the businesses collection
+          const businessesDoc = geofirestore.collection("businesses").doc(afterData.businessid);
+          await businessesDoc.update({
+            coordinates: new admin.firestore.GeoPoint(afterData.newLocation.latitude, afterData.newLocation.longitude)
+          });
+
+          // Update user's business coordinates
+          const accountRef = db.collection("users").doc(userid);
+          await accountRef.update({
+            "business.coordinates": {
+              _latitude: afterData.newLocation.latitude,
+              _longitude: afterData.newLocation.longitude
+            },
+            "business.locationchange": false
+          });
+
+          console.log(`Location change approved for user ${userid}`);
+        } catch (error) {
+          console.error("Error approving location change:", error);
+        }
+      } else if (afterData.status === "denied") {
+        // Deny the location change
+        try {
+          // Just reset the locationchange flag
+          const accountRef = db.collection("users").doc(userid);
+          await accountRef.update({
+            "business.locationchange": false
+          });
+
+
+          console.log(`Location change denied for user ${userid}`);
+        } catch (error) {
+          console.error("Error denying location change:", error);
+        }
+      }
+
+      // Delete the locationchange document after processing
+      try {
+        await snapshot.after.ref.delete();
+        console.log(`Location change document deleted for user ${userid}`);
+      } catch (error) {
+        console.error("Error deleting location change document:", error);
+      }
+    }
+  });
+
 exports.OnUserUpdate = functions.firestore
   .document("users/{userid}")
   .onUpdate(async (snapshot, context) => {
@@ -1513,6 +1572,36 @@ exports.OnUserUpdate = functions.firestore
       }
     }
 
+    if (afterData.business && beforeData.business && afterData.business.coordinates._latitude !== beforeData.business.coordinates._latitude || afterData.business.coordinates._longitude !== beforeData.business.coordinates._longitude) {
+      const locationChangesRef = db.collection("locationchanges").doc(userId);
+        await locationChangesRef.set({
+          userid: userId,
+          businessid: afterData.business.businessid,
+          businessName: afterData.business.name,
+          businessPhoto: afterData.profilephoto,
+          businessCategory: afterData.business.category,
+          username: afterData.username,
+          previousLocation: {
+            latitude: beforeData.business.coordinates._latitude,
+            longitude: beforeData.business.coordinates._longitude,
+            address: beforeData.business.address || "Previous location"
+          },
+          newLocation: {
+            latitude: afterData.business.coordinates._latitude,
+            longitude: afterData.business.coordinates._longitude,
+            address: afterData.business.address || "New location"
+          },
+          status: "pending",
+          requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+          reason: "Business location update requested"
+        });
+      
+
+        // set 'locationchange' to true on the business document
+        snapshot.after.ref.update({"business.locationchange":true});
+
+        console.log("location change requested");
+    }
 
     if (beforeData.isonline !== afterData.isonline) {
       const querySnapshot = await db.collectionGroup("onlineusers")
@@ -1624,8 +1713,19 @@ exports.getOnlineUsers = functions.https.onCall(async (data, context) => {
     const shuffleArray = (array) => array.sort(() => Math.random() - 0.5);
     onlineUsers = shuffleArray(onlineUsers);
 
+    // Remove users with duplicate IDs (keep only the first occurrence)
+    const uniqueUsersMap = new Map();
+    onlineUsers.forEach((user) => {
+      if (!uniqueUsersMap.has(user.id)) {
+        uniqueUsersMap.set(user.id, user);
+      }
+    });
+
+    // Convert map back to array
+    const uniqueUsers = Array.from(uniqueUsersMap.values());
+
     // Limit to 30 users
-    const limitedusers = onlineUsers.slice(0, 30);
+    const limitedusers = uniqueUsers.slice(0, 30);
     // Return the list of online users
     return limitedusers;
   } catch (error) {
@@ -1691,6 +1791,7 @@ exports.onChatAdded = functions.firestore
       ...(chatInfo.messageType === "text" ?{message: chatInfo.message} : chatInfo.messageType === "location" ? {message:"location"} : {message:"image"}),
       photo: currentUserInfoSnap.data().profilephoto,
       username: currentUserInfoSnap.data().username,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
       isread: false,
       isoppread: false,
       stamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -1736,6 +1837,7 @@ exports.onChatAdded = functions.firestore
       username: oppUserInfoSnap.data().username,
       isread: true,
       isoppread: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
       stamp: admin.firestore.FieldValue.serverTimestamp(),
       senderid: senderid,
     };
@@ -1952,7 +2054,7 @@ exports.onPostsCall = functions.firestore.document("users/{userid}")
 
 exports.getPosts = functions.https.onCall(async (data, context) => {
   try {
-    const {userid, postlength, isrefreshing} = data;
+    const {userid, postlength} = data;
 
     if (!userid) {
       return console.log("id not found");
@@ -2078,7 +2180,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
     const validPosts = fullPosts.filter(Boolean);
 
     // Check if we need to fetch businesses (after the 10th post or if there aren't many posts)
-    if ((postlength === 0 || isrefreshing) && userSnap.data().version === 5) {
+    if (userSnap.data().version === 5) {
       // After checking for events, also check for businesses
       const businessesGeoCollection = geofirestore.collection("businesses");
 
@@ -2121,11 +2223,24 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
           validPosts.push(businessesObject); // Add at the end
         }
 
+        if (validPosts.length >= 10) {
+          validPosts.splice(10, 0, {...businessesObject, id: getRandomString(10)}); // Insert after the 10th item
+        } 
+
+        if (validPosts.length >= 20) {
+          validPosts.splice(20, 0, {...businessesObject, id: getRandomString(10)}); // Insert after the 10th item
+        } 
+
+        if (validPosts.length >= 30) {
+          validPosts.splice(30, 0, {...businessesObject, id: getRandomString(10)}); // Insert after the 10th item
+        } 
+
+
         console.log("Adding businesses:", JSON.stringify(businessesObject));
       }
     }
 
-    if ((postlength === 0 || isrefreshing) && userSnap.data().version === 5) {
+    if (userSnap.data().version === 5) {
       // Get events if any
       const eventsgeocollection = geofirestore.collection("events");
 
@@ -2157,7 +2272,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
       if (events.length > 0) {
         events.sort((a, b) => a.distanceValue - b.distanceValue);
 
-        const eventsObject = {contentType: "event", events, id:"id12"};
+        const eventsObject = {contentType: "event", events, id:"id123"};
 
         // Determine insertion position
         if (validPosts.length > 5) {
@@ -2166,6 +2281,15 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
           validPosts.push(eventsObject); // Add at the end
         }
 
+        if (validPosts.length >= 15) {
+          validPosts.splice(15, 0, {...eventsObject, id: getRandomString(10)}); // Insert after the 10th item
+        } 
+
+        if (validPosts.length >= 25) {
+          validPosts.splice(25, 0, {...eventsObject, id: getRandomString(10)}); // Insert after the 10th item
+        } 
+
+        
         console.log(JSON.stringify(eventsObject));
       }
     }
@@ -4977,7 +5101,9 @@ exports.onOrderReceived = functions.firestore
   });
 
   exports.getSubscriptionStatus = functions.https.onCall(async (data, context) => {
-    const {userid, postpage} = data;
+    const {userid, page} = data;
+
+    // removed postpage
   
     const userSnap = await db.collection("users").doc(userid).get();
     const userData = userSnap.data();
@@ -4985,12 +5111,12 @@ exports.onOrderReceived = functions.firestore
     const currentSub = userData.subscription;
 
     // Get monetization info
-    const monetizationInfo = await db.collection("information").doc("info").get();
-    const monetizationData = monetizationInfo.data();
+     const monetizationInfo = await db.collection("information").doc("info").get();
+     const monetizationData = monetizationInfo.data();
 
-    if (postpage && monetizationData.monetizationinfo.isnormalaccountfree === true) {
-      return {status: "active", subscriptionType: null};
-    }
+     if (monetizationData.monetizationinfo.isnormalaccountfree === true && page !== "subscription") {
+      return {status: "active", subscriptionType:"grace_period"};
+    } 
   
     if (!currentSub || !currentSub.endDate) {
       return {status: "inactive", subscriptionType: null};
@@ -5013,6 +5139,16 @@ exports.onOrderReceived = functions.firestore
   
     const daysPassed = Math.ceil((now - endDate) / (1000 * 60 * 60 * 24));
   
+    const fiveDaysLater = new Date(endDate);
+    fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
+
+    // get formatted fiveDaysLater
+    const formattedFiveDaysLater = fiveDaysLater.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+
     // Format readable endDate
     const formattedEndDate = endDate.toLocaleDateString("en-US", {
       year: "numeric",
@@ -5034,6 +5170,7 @@ exports.onOrderReceived = functions.firestore
         ...currentSub,
         status: "active",
         period:"grace_period",
+        expiryDate: formattedFiveDaysLater,
         days: daysPassed,
         endDate: formattedEndDate
       };
@@ -5132,17 +5269,352 @@ exports.onOrderReceived = functions.firestore
     const plans = await db.collection("information").doc("info").get();
     const plansData = plans.data();
 
+    // Currency mapping based on country codes
+    const currencyMap = {
+      KE: "KES",
+      NG: "NGN",
+      GH: "GHS",
+      UG: "UGX",
+      RW: "RWF",
+      ZA: "ZAR",
+      US: "USD",
+      GB: "GBP",
+      FR: "EUR",
+      DE: "EUR",
+      IN: "INR",
+      ZM: "ZMW",
+      // Add more as needed
+    };
+
+    // Exchange rates from KES (Kenyan Shilling) to other currencies
+    // These should ideally be fetched from a real-time API in production
+    const exchangeRates = {
+      KES: 1, // Base currency
+      USD: 0.0077, // 1 KES = 0.0077 USD
+      EUR: 0.0070, // 1 KES = 0.0070 EUR
+      GBP: 0.0060, // 1 KES = 0.0060 GBP
+      NGN: 3.54, // 1 KES = 3.54 NGN
+      GHS: 0.092, // 1 KES = 0.092 GHS
+      UGX: 28.5, // 1 KES = 28.5 UGX
+      RWF: 10.2, // 1 KES = 10.2 RWF
+      ZAR: 0.14, // 1 KES = 0.14 ZAR
+      INR: 0.65, // 1 KES = 0.65 INR
+    };
+
+    const apiKey = functions.config().googlemaps.key;
+
+    let countrycode = null;
+    // Get country code from user location
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${userData.coordinates.latitude},${userData.coordinates.longitude}&key=${apiKey}`
+    );
+
+    const dataLocation = await response.json();
+    console.log("data", JSON.stringify(dataLocation));
+
+    if (dataLocation.results.length > 0) {
+      const countryComponent = dataLocation.results[0].address_components.find((component) =>
+        component.types.includes("country")
+      );
+
+      countrycode = countryComponent.short_name || "US"; // e.g. "KE", "NG"
+    } else {
+      countrycode = "US";
+    }
+
+    const targetCurrency = currencyMap[countrycode] || "USD";
+    const exchangeRate = exchangeRates[targetCurrency] || exchangeRates.USD;
+
+    // Function to convert price from KES to target currency
+    const convertPrice = (kesPrice) => {
+      // Extract numeric value from KES price (e.g., "Ksh 500" -> 500)
+      const numericPrice = parseInt(kesPrice.replace(/[^\d]/g, ""));
+      const convertedPrice = Math.round(numericPrice * exchangeRate);
+      
+      // Format with appropriate currency symbol
+      return `${targetCurrency} ${convertedPrice.toLocaleString()}`;
+    };
+
+    // Convert plan prices to target currency
+    const convertPlansToTargetCurrency = (originalPlans) => {
+      if (!originalPlans) return originalPlans;
+
+      const convertedPlans = {...originalPlans};
+      
+      // Convert MONTHLY plan if it exists
+      if (convertedPlans.MONTHLY) {
+        convertedPlans.MONTHLY = {
+          ...convertedPlans.MONTHLY,
+          price: convertPrice(convertedPlans.MONTHLY.price),
+          currency: targetCurrency
+        };
+      }
+
+      // Convert YEARLY plan if it exists
+      if (convertedPlans.YEARLY) {
+        convertedPlans.YEARLY = {
+          ...convertedPlans.YEARLY,
+          price: convertPrice(convertedPlans.YEARLY.price),
+          currency: targetCurrency
+        };
+      }
+
+      return convertedPlans;
+    };
+
     if (accountType === "business") {
       console.log("Business account");
+      const convertedPlans = convertPlansToTargetCurrency(plansData.businesspayment);
+      
       return {
-        plans: plansData.businesspayment
+        plans: {
+          ...convertedPlans,
+          currency: targetCurrency,
+          countryCode: countrycode
+        }
       };
     } else {
       console.log("Normal account");
+      const convertedPlans = convertPlansToTargetCurrency(plansData.businesspayment);
+      
       return {
-        plans: plansData.businesspayment
+        plans: {
+          ...convertedPlans,
+          currency: targetCurrency,
+          countryCode: countrycode
+        }
       };
     }
   });
 
+  // Add Flutterwave payment verification function
+  exports.verifyFlutterwavePayment = functions.https.onCall(async (data, context) => {
+    const {transaction_id: transactionId, tx_ref: txRef, userid} = data;
 
+    if (!transactionId || !txRef || !userid) {
+      console.error("Missing required parameters for Flutterwave verification");
+      return {success: false, error: "Missing required parameters"};
+    }
+
+    console.log(`Verifying Flutterwave payment for user: ${userid}, tx_ref: ${txRef}`);
+
+    // Helper function to create notification for a user
+    async function createNotificationForUser(userId, notificationData) {
+      try {
+        const notificationsRef = db.collection("users").doc(userId).collection("notifications").doc();
+        await notificationsRef.set({
+          ...notificationData,
+          read: false,
+          id: notificationsRef.id
+        });
+        
+        console.log(`Notification created for user ${userId}`);
+      } catch (error) {
+        console.error(`Error creating notification for user ${userId}:`, error);
+      }
+    }
+
+    try {
+      // Verify payment with Flutterwave API
+      const flutterwaveSecretKey = functions.config().flutterwave.secret_key;
+
+      console.log("flutterwaveSecretKey", flutterwaveSecretKey);
+      
+      const verificationResponse = await fetch(`https://api.flutterwave.com/v3/transactions/${transactionId}/verify`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${flutterwaveSecretKey}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      const verificationData = await verificationResponse.json();
+      console.log("Flutterwave verification response:", JSON.stringify(verificationData));
+
+      const plan = verificationData.data.meta.plan;
+
+      if (verificationData.status === "success" && verificationData.data.status === "successful") {
+        // Payment verified successfully, now update subscription
+        const userRef = db.collection("users").doc(userid);
+        const userSnap = await userRef.get();
+        
+        if (!userSnap.exists) {
+          console.error(`User ${userid} not found`);
+          return {success: false, error: "User not found"};
+        }
+        
+        const userData = userSnap.data();
+        let subscription = userData.subscription || {};
+        const currentDate = new Date();
+        let newEndDate = new Date();
+        
+        // Determine if this is an upgrade from monthly to yearly
+        const isUpgrade = plan === "yearly" && 
+                        subscription.subscriptionType === "monthly" && 
+                        subscription.status === "active";
+                        
+        console.log(`Subscription update - isUpgrade: ${isUpgrade}, current type: ${subscription.subscriptionType}, new type: ${plan}`);
+        
+        const now = new Date();
+        const daysPassed = subscription.endDate ? 
+          Math.ceil((now - subscription.endDate.toDate()) / (1000 * 60 * 60 * 24)) : 0;
+      
+        // Calculate subscription end date based on plan type (same logic as M-Pesa)
+        if (plan === "monthly") {
+          if (subscription.endDate && daysPassed > 6) {
+            const currentEndDate = subscription.endDate.toDate();
+            newEndDate = new Date(currentEndDate);
+            newEndDate.setDate(newEndDate.getDate() + 30);
+          } else {
+            newEndDate.setDate(currentDate.getDate() + 30);
+          }
+        } else if (plan === "yearly") {
+          if (isUpgrade) {
+            const currentEndDate = subscription.endDate.toDate();
+            newEndDate = new Date(currentEndDate);
+            const remainingDays = Math.max(0, Math.floor((currentEndDate - currentDate) / (1000 * 60 * 60 * 24)));
+            newEndDate.setDate(newEndDate.getDate() + 365 - 30 + remainingDays);
+            
+            console.log(`Upgrade calculation: Current end date: ${currentEndDate.toISOString()}, Remaining days: ${remainingDays}, New end date: ${newEndDate.toISOString()}`);
+          } else if (subscription.endDate && daysPassed > 6 && subscription.subscriptionType === "yearly") {
+            const currentEndDate = subscription.endDate.toDate();
+            newEndDate = new Date(currentEndDate);
+            newEndDate.setDate(newEndDate.getDate() + 365);
+          } else {
+            newEndDate.setDate(currentDate.getDate() + 365);
+          }
+        } else {
+          console.error(`Invalid plan type: ${plan}`);
+          return {success: false, error: "Invalid plan type"};
+        }
+        
+        // Extract payment details from Flutterwave response
+        const paymentDetails = {
+          transactionId: transactionId,
+          amount: verificationData.data.amount,
+          currency: verificationData.data.currency,
+          paymentType: verificationData.data.payment_type,
+          transactionRef: txRef,
+          customerEmail: verificationData.data.customer.email,
+          customerPhone: verificationData.data.customer.phone_number,
+          transactionDate: verificationData.data.created_at,
+          flwRef: verificationData.data.flw_ref
+        };
+        
+        // Create or update subscription data (same structure as M-Pesa)
+        subscription = {
+          plan: plan === "monthly" ? "Monthly Plan" : "Yearly Plan",
+          startDate: admin.firestore.Timestamp.fromDate(currentDate),
+          endDate: admin.firestore.Timestamp.fromDate(newEndDate),
+          status: "active",
+          accountType: userData.isbusinessaccount ? "business" : "normal",
+          subscriptionType: plan,
+          lastPayment: admin.firestore.Timestamp.fromDate(currentDate),
+          paymentMethod: "Flutterwave",
+          graceNotificationSent: false,
+          lastPaymentDetails: paymentDetails
+        };
+        
+        // Update user with subscription data
+        await userRef.update({
+          subscription: subscription,
+          isbusinessaccount: true
+        });
+        
+        console.log(`Subscription updated for user ${userid} with end date ${newEndDate.toISOString()}`);
+        
+        // Create notification for the user (same as M-Pesa)
+        const notificationText = isUpgrade ? 
+          "Your subscription has been upgraded to the Yearly Plan successfully." :
+          `Your ${plan === "monthly" ? "Monthly" : "Yearly"} subscription has been activated successfully.`;
+        
+        await createNotificationForUser(userid, {
+          title: isUpgrade ? "Subscription Upgraded" : "Subscription Activated",
+          body: notificationText,
+          type: "subscription",
+          data: {
+            subscriptionType: plan,
+            endDate: newEndDate.toISOString(),
+            receiptNumber: verificationData.data.flw_ref || transactionId
+          },
+          timestamp: admin.firestore.Timestamp.fromDate(currentDate)
+        });
+        
+        return { 
+          success: true, 
+          message: "Payment verified and subscription updated successfully",
+          subscription: subscription
+        };
+      } else {
+        // Payment verification failed
+        console.error(`Flutterwave payment verification failed for user ${userid}. Status: ${verificationData.status}`);
+        
+        // Create notification for failed verification
+        await createNotificationForUser(userid, {
+          title: "Payment Verification Failed",
+          body: "Your payment could not be verified. Please contact support if you were charged.",
+          type: "payment_failed",
+          data: {
+            transactionId: transactionId,
+            txRef: txRef,
+            status: verificationData.status
+          },
+          timestamp: admin.firestore.Timestamp.fromDate(new Date())
+        });
+        
+        return { 
+          success: false, 
+          error: "Payment verification failed",
+          details: verificationData
+        };
+      }
+    } catch (error) {
+      console.error("Error verifying Flutterwave payment:", error);
+      
+      // Create notification for verification error
+      await createNotificationForUser(userid, {
+        title: "Payment Processing Error",
+        body: "There was an error processing your payment. Please contact support.",
+        type: "payment_error",
+        data: {
+          transactionId: transactionId,
+          txRef: txRef,
+          error: error.message
+        },
+        timestamp: admin.firestore.Timestamp.fromDate(new Date())
+      });
+      
+      return { 
+        success: false, 
+        error: error.message,
+        message: "Failed to verify payment. Please try again later."
+      };
+    }
+  });
+
+  exports.onUserInvited = functions.firestore.document("events/{eventId}/users/{userId}").onUpdate(async (snapshot, context) => {
+    const eventId = context.params.eventId;
+    const userId = context.params.userId;
+
+    console.log("eventId", eventId);
+    console.log("userId", userId);
+
+    // check if invited after is true and invited before is false
+    const invitedAfter = snapshot.after.data().invited;
+    const invitedBefore = snapshot.before.data().invited;
+    if (invitedAfter && !invitedBefore) {
+      const eventRef = db.collection("events").doc(eventId);
+      // add user to attendee list if the list size is less than 5
+      const eventSnap = await eventRef.get();
+      const eventData = eventSnap.data();
+      const attendeesList = eventData.attendees || [];
+      if (attendeesList.length < 5) {
+        attendeesList.push({id: userId, profilephoto: eventData.profilephoto || "https://via.placeholder.com/50"});
+      }
+      await eventRef.update({
+        attendees: attendeesList
+      });
+    }
+
+    return;
+  });

@@ -4,6 +4,7 @@ import { Slot, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Provider } from 'react-redux';
@@ -170,6 +171,7 @@ export default function RootLayout() {
         <ThemeProvider  value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
 
          
+        <GestureHandlerRootView>
         <Stack>
           
           <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -182,7 +184,7 @@ export default function RootLayout() {
 
           <Stack.Screen name="postpage" options={{ headerShown: false , animation:'slide_from_right'}} />
           <Stack.Screen name="oppuserprofile" options={{ headerShown: false , animation:'slide_from_right'}} />
-          <Stack.Screen name="chatglobal" options={{ headerShown: true,title:'', animation:'slide_from_right' }} />
+          <Stack.Screen name="chatglobal" options={{ headerShown: true,title:'', animation:'slide_from_right',headerBackVisible:false }} />
           <Stack.Screen name="tagscomponent" options={{ headerShown: false }} />
 
           <Stack.Screen name="eventdetails" options={{ headerShown: true,title:'', animation:'slide_from_right' }} />
@@ -196,6 +198,8 @@ export default function RootLayout() {
 
           <Stack.Screen name="textToImage" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
         </Stack>
+          
+        </GestureHandlerRootView>
           
         </ThemeProvider>
 

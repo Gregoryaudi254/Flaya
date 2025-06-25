@@ -5,7 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  ActivityIndicator
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -70,6 +71,14 @@ const AdminPanel = () => {
     router.push('/admin/approvals');
   };
   
+  const navigateToEvents = () => {
+    router.push('/admin/events');
+  };
+  
+  const navigateToLocationChanges = () => {
+    router.push('/admin/locationchanges');
+  };
+  
   if (!isAdmin) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#121212' : '#F5F5F5' }]}>
@@ -119,7 +128,8 @@ const AdminPanel = () => {
           headerStyle: { backgroundColor: isDark ? '#121212' : '#F5F5F5' },
         }}
       />
-      
+
+      <ScrollView>
       <View style={styles.contentContainer}>
         <Text style={[styles.welcomeText, { color: isDark ? '#FFFFFF' : '#000000' }]}>
           Admin Management Center
@@ -159,8 +169,39 @@ const AdminPanel = () => {
               View and manage orders from all businesses
             </Text>
           </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.menuItem, { backgroundColor: isDark ? '#222222' : '#FFFFFF' }]}
+            onPress={navigateToEvents}
+          >
+            <View style={[styles.iconContainer, { backgroundColor: Colors.green }]}>
+              <Ionicons name="calendar-outline" size={24} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.menuItemTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>
+              Events Management
+            </Text>
+            <Text style={[styles.menuItemDescription, { color: isDark ? '#AAAAAA' : '#777777' }]}>
+              View, manage and create events
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.menuItem, { backgroundColor: isDark ? '#222222' : '#FFFFFF' }]}
+            onPress={navigateToLocationChanges}
+          >
+            <View style={[styles.iconContainer, { backgroundColor: Colors.purple }]}>
+              <Ionicons name="location-outline" size={24} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.menuItemTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>
+              Location Changes
+            </Text>
+            <Text style={[styles.menuItemDescription, { color: isDark ? '#AAAAAA' : '#777777' }]}>
+              Manage location changes
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };

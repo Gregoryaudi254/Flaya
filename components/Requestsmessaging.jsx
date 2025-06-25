@@ -1,7 +1,6 @@
-import { StyleSheet, Text, View ,FlatList,Pressable,ActivityIndicator,TouchableOpacity,Image} from 'react-native'
-import React ,{useRef,useState,useMemo,useCallback}from 'react'
-
-
+import { StyleSheet, Text, View ,FlatList,Pressable,ActivityIndicator,TouchableOpacity,Image,RefreshControl} from 'react-native'
+import React ,{useRef,useState,useMemo,useCallback,useEffect}from 'react'
+import * as Haptics from 'expo-haptics';
 
 import MessageItem from '@/components/MessageItem';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -10,13 +9,11 @@ import { Colors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
 
 import { useSelector, useDispatch } from 'react-redux'
-import { collection, getDocs ,query ,orderBy, where,limit, onSnapshot,startAfter, deleteDoc, updateDoc, doc,writeBatch} from 'firebase/firestore';
+import { collection, getDocs ,query ,orderBy, where,limit, onSnapshot,startAfter, deleteDoc, updateDoc, doc,writeBatch,setDoc, serverTimestamp, getDoc} from 'firebase/firestore';
 import { db } from '@/constants/firebase';
 import { getData } from '@/constants/localstorage';
 
 //import { setMessages } from '@/slices/primaryMessagesSlice';
-import { useEffect } from 'react';
-
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import Dialog from '@/components/CustomDialog';
@@ -27,195 +24,201 @@ import { getDefaultReturnUrl } from 'expo-auth-session';
 import MemoizedBottomSheetMessaging from './MemoizedBottomSheetMessaging';
 import MemoizedDialog from './MemoizedDialog';
 
+// Memoized Empty State Component for Requests
+const RequestsEmptyStateComponent = React.memo(({ searchQuery, colorScheme }) => {
+  const isDark = colorScheme === 'dark';
+  
+  return (
+    <View style={styles.emptyState}>
+      <Text style={[styles.emptyStateText, {
+        color: isDark ? Colors.light_main : Colors.dark_main,
+      }]}>
+        {searchQuery ? 'No requests found' : 'No Message Requests'}
+      </Text>
+      <Text style={[styles.emptyStateSubtext, {
+        color: isDark ? '#888' : '#666',
+      }]}>
+        {searchQuery ? 'Try adjusting your search terms' : 'Message requests from new contacts will appear here'}
+      </Text>
+    </View>
+  );
+});
+RequestsEmptyStateComponent.displayName = 'RequestsEmptyStateComponent';
 
+// Memoized Loading Component
+const LoadingComponent = React.memo(({ colorScheme }) => (
+  <ActivityIndicator 
+    size='large' 
+    color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} 
+    style={styles.loadingIndicator} 
+  />
+));
+LoadingComponent.displayName = 'LoadingComponent';
 
-const Requestmessages = () => {
+// Memoized Footer Component
+const FooterComponent = React.memo(({ loadingmore }) => {
+  return loadingmore ? (
+    <View style={styles.footerContainer}>
+      <ActivityIndicator size="large" color="white" />
+    </View>
+  ) : null;
+});
+FooterComponent.displayName = 'FooterComponent';
+
+const Requestsmessaging = React.memo(({ searchQuery = '' }) => {
+
+  console.log("requests message");
 
   const colorScheme = useColorScheme();
   const dispatch = useDispatch();
-
   const router = useRouter();
+  const toast = useToast();
 
+  // Refs
   const bottomSheetRef = useRef(null);
-  const initialSnapIndex = -1;
 
+  // State - using minimal re-renders
   const [selectedMessage,setSelectedMessage] = useState({});
-
-
- // const dispatch = useDispatch();
-
-
- // const list = useSelector(state => state.messages.messages);
-
+  const [dialog,setDialog] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [messages,setMessages] = useState([]);
-
+  const [filteredMessages, setFilteredMessages] = useState([]);
   const [userInfo,setUserInfo] = useState();
-
   const [lastVisibleMessage,setLastVisible] = useState(null);
-  const isFirstSnapshot = useRef(true);
-
-   const [dialog,setDialog] = useState(false);
-
-
-
-  useEffect(() => {
-    // Set isFirstSnapshot to false after 3 seconds (adjust as needed)
-    const timer = setTimeout(() => {
-        isFirstSnapshot.current = false;
-        console.log("isFirstSnapshot set to false");
-    }, 10000);
-
-    // Clean up the timer on component unmount
-    return () => clearTimeout(timer);
-}, []);
-
+  const [initialLoadTimestamp, setInitialLoadTimestamp] = useState(null);
   const [initialLoad, setInitialLoad] = useState(true);
   const [shouldLoadMore, setShouldLoadMore] = useState(true);
+  const [loadingmore,setLoadingMore] = useState(false);
 
-  const getMessages = async (callback) => {
+  // Memoized constants
+  const initialSnapIndex = useMemo(() => -1, []);
+  const snapPoinst = useMemo(() => ['60%','100%'],[]);
 
-    const userInfo = await getData('@profile_info');
+  // Redux selector with proper memoization
+  const { value } = useSelector(state => state.data, (prev, next) => prev.value === next.value);
 
-    setUserInfo(userInfo)
-
-    try{
-      const messagesRef = collection(db, `users/${userInfo.uid}/messages`);
-      const q = query(messagesRef, where('isrequest', '==', true), orderBy('stamp', 'desc'), limit(15));
-      const querySnapshot = await getDocs(q);
-
-      // Map over messages and convert `stamp` to a date string
-      const messages = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            ...data
-        };
-      });
-
-      setShouldLoadMore(messages.length > 11);
-
-      console.log("snap "+querySnapshot.docs[querySnapshot.docs.length - 1])
-
-      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]); // Save the last document
-
-      callback(messages,true);
-      const listenerq = query(messagesRef, where('isrequest', '==', true), orderBy('stamp', 'desc'));
-
-      setInitialLoad(false);
-  
-      // Real-time listener to detect new documents
-      return onSnapshot(listenerq, (snapshot) => {
-
-        console.log("we hear")
-
-        if (isFirstSnapshot.current) {
-          console.log("not run")
-          return;
-        }
-
-        snapshot.docChanges().forEach((change) => {
-          console.log(change.type+" changed "+JSON.stringify(change.doc.data()))
-          callback(change.doc.data(),false,change.type);
-        });
-        
-    });
-
-    }catch(e){
-      console.log(e)
-
-    }
-
-
-  }
-
+  // Core setup effect with proper cleanup
   useEffect(() => {
     let unsubscribe;
 
-    // Call the async function and set the unsubscribe function
-    (async () => {
-        unsubscribe = await getMessages((messages, isInitial,type = null) => {
-            setMessages((prevChats) => {
-                if (isInitial) {
-                    return messages; // Set the initial 30 messages
-                } else {
-                  const messageIndex = prevChats.findIndex(message => message.id === messages.id);
+    const setupMessaging = async () => {
+      try {
+        const userInfo = await getData('@profile_info');
+        setUserInfo(userInfo);
 
-                  if (messageIndex > -1) { // Message is already in the list
-                      const existingMessage = prevChats[messageIndex];
-                      
-                      // Check if timestamp has changed
-                      if (existingMessage.stamp.toMillis() !== messages.stamp.toMillis()) {
-                          // Remove the old message and add the new one at the top
-                          const updatedChats = [...prevChats];
-                          updatedChats.splice(messageIndex, 1);
-                          return [ messages, ...updatedChats];
+        // 1. Initial load - one-time fetch
+        const messagesRef = collection(db, `users/${userInfo.uid}/messages`);
+        const initialQuery = query(
+          messagesRef, 
+          where('isrequest', '==', true), 
+          orderBy('timestamp', 'desc'), 
+          limit(15)
+        );
+        
+        const querySnapshot = await getDocs(initialQuery);
+        const messages = querySnapshot.docs.map(doc => ({ ...doc.data() }));
+        
+        setMessages(messages);
+        setShouldLoadMore(messages.length > 11);
+        setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+        setInitialLoad(false);
+        
+        // Record the timestamp after initial load
+        const loadTimestamp = new Date();
+        setInitialLoadTimestamp(loadTimestamp);
 
-                      } else {
+        // 2. Real-time listener - only for changes after initial load
+        const realtimeQuery = query(
+          messagesRef,
+          where('isrequest', '==', true),
+          where('stamp', '>', loadTimestamp),
+          orderBy('stamp', 'desc')
+        );
 
-                           if (type === "removed") {
+        // Set up real-time listener for new messages only
+        unsubscribe = onSnapshot(realtimeQuery, (snapshot) => {
+          snapshot.docChanges().forEach(async (change) => {
+            const messageData = change.doc.data();
+            
+            console.log(`Real-time ${change.type}:`, messageData.username);
+           
+            setMessages(prevMessages => {
+              const existingIds = new Set(prevMessages.map(msg => msg.id));
+              if (!existingIds.has(messageData.id)) {
+                console.log("Adding new real-time message" + JSON.stringify(existingIds));
+                return [messageData, ...prevMessages];
+              }
 
-                            console.log("removed")
+              const existingIndex = prevMessages.findIndex(msg => msg.id === messageData.id);
+              const existingMsg = prevMessages[existingIndex];
 
-                            const updatedChats = [...prevChats];
-                            updatedChats.splice(messageIndex, 1);
-                            return updatedChats;
-
-                           } else {
-                            // Replace the existing message without changing its position
-                           return prevChats.map((oldmessage, index) =>
-                            index === messageIndex ? messages : oldmessage
-                            );
-
-                           }
-                          
-                      }
-                  } else {
-
-                    if (type === 'added') {
-                       // New message not in the list, add it to the top
-                       const existingIds = new Set(prevChats.map(message => message.id));
-                     
-                       // Avoid creating a new array if there's no change
-                       if (existingIds.has(messages.id)) {
-                         console.log("message exists")
-                         return prevChats;
-                       }
-                        // New message not in the list, add it to the top
-                        return [messages, ...prevChats];
-                     
-                    }else if (type === 'modified') {
-                      return prevChats;
-                    }
-               
-                     
-                  }
-
-
-                    
+              // 2. If message content is identical, replace in place
+              if (existingMsg.message === messageData.message) {
+                const updatedMessages = [...prevMessages];
+                existingMsg.isread = messageData.isread;
+                existingMsg.isoppread = messageData.isoppread
+                updatedMessages[existingIndex] = messageData;
+                console.log("updated messages " + updatedMessages.length)
+                return updatedMessages;
+              }
+              console.log("new message " + messageData.message)
+              // remove the message if it already exists and add new message on top
+              return [messageData, ...prevMessages.filter(msg => msg.id !== messageData.id)];
+            });
+            
+            if (change.type === 'removed') {
+              // Check message is on firestore
+              const messageRef = doc(db, `users/${userInfo.uid}/messages/${messageData.id}`);
+              const messageDoc = await getDoc(messageRef);
+              if (!messageDoc.exists()) {
+                // Message is on firestore, remove it from messages
+                setMessages(prevMessages => prevMessages.filter(msg => msg.id !== messageData.id));
+              }
+              console.log("message not on firestore")
               }
             });
         });
-    })();
+
+      } catch (error) {
+        console.error('Error setting up messaging:', error);
+        setInitialLoad(false);
+      }
+    };
+
+    setupMessaging();
 
     return () => {
         if (unsubscribe) unsubscribe();
     };
 }, []);
 
+  // Optimized search filter with memoization
+  const searchFilter = useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    const query = searchQuery.toLowerCase();
+    return (message) => 
+      message.username.toLowerCase().includes(query) ||
+      message.message.toLowerCase().includes(query);
+  }, [searchQuery]);
 
+  // Filter messages with optimized logic
+  useEffect(() => {
+    if (!searchFilter) {
+      setFilteredMessages(messages);
+    } else {
+      setFilteredMessages(messages.filter(searchFilter));
+    }
+  }, [messages, searchFilter]);
 
-
-  const handleLongPress = (item) => {
-    setSelectedMessage(item)
+  // Optimized event handlers with useCallback
+  const handleLongPress = useCallback((item) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedMessage(item);
     bottomSheetRef.current?.snapToIndex(0); 
-  };
+  }, []);
 
-  const snapPoinst = useMemo(() => ['50%'],[])
-
-  const handleMessagePress = (item) =>{
-
-    console.log("stra " + item.isrequest);
-
-    isFirstSnapshot.current = false;
+  const handleMessagePress = useCallback((item) => {
+    console.log("stra " + item.isrequest)
     
     const oppUserInfo = {
       username:item.username,
@@ -223,125 +226,181 @@ const Requestmessages = () => {
       uid:item.id,
       requeststatus:item.isrequestaccepted,
       isrequest:item.isrequest
-
     }
 
     router.push({
       pathname: '/chatglobal',
       params: { data: JSON.stringify(oppUserInfo) }
     });
+  }, [router]);
 
-  }
-
+  // Highly optimized renderItem with all dependencies memoized
   const renderItem = useCallback(
     ({ item }) => (
-
-      <Pressable
-        onLongPress={()=>handleLongPress(item)}
-        onPress={() =>handleMessagePress(item)}
-      
-        style={({ pressed }) => [
-          pressed && { opacity: 1 }, // Maintain opacity during press
-        ]}
-        > 
-        <MessageItem message={item} currentuserid={userInfo.uid} page={'primary'}/>
-        </Pressable>
-     
-    )
+      <MessageItem 
+        message={item} 
+        currentuserid={userInfo?.uid || null} 
+        page={'requests'}
+        onPress={() => handleMessagePress(item)}
+        onLongPress={() => handleLongPress(item)}
+      />
+    ),[userInfo?.uid, handleMessagePress, handleLongPress]
   );
 
-  const [loadingmore,setLoadingMore] = useState(false);
-
+  // Optimized load more with better performance
   const loadMoreMessage = useCallback(async () => {
-
-   
-
-    if (loadingmore || !lastVisibleMessage) return;
+    if (loadingmore || !lastVisibleMessage || !shouldLoadMore) return;
     setLoadingMore(true);
+    
+    try {
     const profileInfo = await getData('@profile_info');
     const chatRef = collection(db, `users/${profileInfo.uid}/messages`);
-    const q = query(chatRef, where('isrequest', '==', true), orderBy('stamp', 'desc'), startAfter(lastVisibleMessage), limit(20));
+      const q = query(chatRef, where('isrequest', '==', true), orderBy('timestamp', 'desc'), startAfter(lastVisibleMessage), limit(20));
 
     const moreSnapshot = await getDocs(q);
     const moreMessages = moreSnapshot.docs.map(doc => ({
         ...doc.data(),
     }));
 
-    setShouldLoadMore(moreMessages > 11);
+      // Fix: Check length properly
+      setShouldLoadMore(moreMessages.length >= 15);
     
-    // Update last visible document and prepend new chats to list
+      // Only update lastVisible if we got new messages
+      if (moreSnapshot.docs.length > 0) {
     setLastVisible(moreSnapshot.docs[moreSnapshot.docs.length - 1]);
+      }
+      
     setMessages((prevMessages) => {
       const existingIds = new Set(prevMessages.map(message => message.id));
       const newMessages = moreMessages.filter(message => !existingIds.has(message.id));
     
       // Avoid creating a new array if there's no change
       if (newMessages.length === 0) {
-        console.log("going here")
+          console.log("No new messages to add");
         return prevMessages;
       }
 
-      return [...prevMessages, ...newMessages]});
-   
+        // Add new messages at the END of the list (bottom) since they are older
+        return [...prevMessages, ...newMessages];
+      });
+    } catch (error) {
+      console.error('Error loading more messages:', error);
+    } finally {
     setLoadingMore(false);
+    }
+  }, [loadingmore, lastVisibleMessage, shouldLoadMore]);
 
-  },[loadingmore,lastVisibleMessage]);
+  // Memoized footer component
+  const footerComponent = useMemo(() => 
+    <FooterComponent loadingmore={loadingmore} />, 
+    [loadingmore]
+  );
 
-
-  const footerComponent = useCallback(() => {
-    return loadingmore ? (
-      <View style={{margin:10}}>
-        <ActivityIndicator size="large" color="white" />
-      </View>
-    ) : null;
-  }, [loadingmore]);
-
-
-  const handleMarkAsRead =  async () => {
-
+  // Optimized action handlers
+  const handleMarkAsRead = useCallback(async () => {
     const userInfo = await getData('@profile_info');
-
     const batch = writeBatch(db);
 
     const messageRef = doc(db, `users/${userInfo.uid}/messages/${selectedMessage.id}`);
-    batch.update(messageRef,{isread:true})
+    batch.update(messageRef,{isread:true, stamp:serverTimestamp()})
 
     const oppmessageRef = doc(db, `users/${selectedMessage.id}/messages/${userInfo.uid}`);
-    batch.update(oppmessageRef,{isoppread:true})
+    batch.update(oppmessageRef,{isoppread:true, stamp:serverTimestamp()})
 
-    // Commit the batch
     try {
       await batch.commit();
       console.log('Batch update successful');
+      showToast("Message marked as read");
     } catch (error) {
       console.error('Error executing batch update:', error);
     }
 
     bottomSheetRef.current?.close();
-  }
+  }, [selectedMessage.id]);
+
+  // Request-specific actions with optimization
+  const handleAcceptRequest = useCallback(async () => {
+    try {
+      const currentUserInfo = await getData('@profile_info');
+      const batch = writeBatch(db);
+
+      // Update current user's message
+      const userMessageRef = doc(db, `users/${currentUserInfo.uid}/messages/${selectedMessage.id}`);
+      batch.update(userMessageRef, { 
+        isrequestaccepted: true,
+        isrequest: false,
+        stamp: serverTimestamp(),
+        timestamp: serverTimestamp()
+      });
+
+      // Update sender's message
+      const senderMessageRef = doc(db, `users/${selectedMessage.id}/messages/${currentUserInfo.uid}`);
+      batch.update(senderMessageRef, { 
+        isrequestaccepted: true,
+        isrequest: false,
+        stamp: serverTimestamp(),
+       
+      });
+
+      await batch.commit();
+      showToast("Request accepted");
+
+      // refresh the messages
+      onRefresh();
+      bottomSheetRef.current?.close();
+    } catch (error) {
+      console.error('Error accepting request:', error);
+    }
+  }, [selectedMessage]);
+
+  const handleDeclineRequest = useCallback(async () => {
+    try {
+      const currentUserInfo = await getData('@profile_info');
+      
+      // Delete the request from both users
+      const userMessageRef = doc(db, `users/${currentUserInfo.uid}/messages/${selectedMessage.id}`);
+      const senderMessageRef = doc(db, `users/${selectedMessage.id}/messages/${currentUserInfo.uid}`);
+      
+      await Promise.all([
+        deleteDoc(userMessageRef),
+        deleteDoc(senderMessageRef)
+      ]);
+
+      onRefresh();
+      
+      showToast("Request declined");
+      bottomSheetRef.current?.close();
+    } catch (error) {
+      console.error('Error declining request:', error);
+    }
+  }, [selectedMessage]);
 
   const handleDelete = useCallback(async () => {
-
     const userInfo = await getData('@profile_info');
-
     const messageRef = doc(db, `users/${userInfo.uid}/messages/${selectedMessage.id}`);
 
     await deleteDoc(messageRef);
-
+    showToast("Message deleted");
+    onRefresh();
     bottomSheetRef.current?.close();
-  })
+  }, [selectedMessage.id]);
+
+  // received redux action from chatglobal with optimization
+  useEffect(() => {
+    if (value !== null && value.intent === 'actionchatglobal') {
+      onRefresh();
+    }
+  },[value, onRefresh]);
 
   const handleBlock = useCallback(async () => {
     bottomSheetRef.current?.close();
-    setDialog(true);
-  })
+    setDialog(true)
+  }, []);
 
   const handleBlockUserConfirmation = useCallback(async() => {
-  
         console.log("going hee")
     
         const batch = writeBatch(db);
-    
         setDialog(false);
     
         const oppuserinfo = {
@@ -353,27 +412,20 @@ const Requestmessages = () => {
         const currentuserprofile = await getData('@profile_info')
         const currentUserRef = doc(db, `users/${currentuserprofile.uid}/blockedusers/${selectedMessage.id}`);
         batch.set(currentUserRef, oppuserinfo);
-    
       
         const oppUserRef = doc(db, `users/${selectedMessage.id}/blockers/${currentuserprofile.uid}`);
         batch.set(oppUserRef, currentuserprofile);
     
         try {
           await batch.commit();
-    
           showToast("User blocked")
-  
-  
+      console.log('lOGGED')
           dispatch(setData({id:selectedMessage.id, intent:'blockuser'}));
-    
-        
         }catch(e){console.log("error blocking "+e)}
-    
-    });
-  
-      const toast = useToast();
-  
-      function showToast(message){
+  }, [selectedMessage, dispatch]);
+
+  // Optimized toast function
+  const showToast = useCallback((message) => {
         toast.show(message, {
           type: "normal",
           placement: "bottom",
@@ -381,22 +433,82 @@ const Requestmessages = () => {
           offset: 30,
           animationType: "zoom-in",
         });
-      };
+  }, [toast]);
+
+  // Optimized refresh function
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Reset pagination
+      setLastVisible(null);
+      setShouldLoadMore(true);
+      
+      // Re-fetch messages
+      const userInfo = await getData('@profile_info');
+      const messagesRef = collection(db, `users/${userInfo.uid}/messages`);
+      const q = query(messagesRef, where('isrequest', '==', true), orderBy('timestamp', 'desc'), limit(15));
+      const querySnapshot = await getDocs(q);
+
+      const messages = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            ...data
+        };
+      });
+
+      setMessages(messages);
+      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      setShouldLoadMore(messages.length > 11);
+    } catch (error) {
+      console.error('Error refreshing messages:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Memoized RefreshControl
+  const refreshControl = useMemo(() => (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+    />
+  ), [refreshing, onRefresh]);
+
+  // Memoized FlatList props for maximum performance
+  const flatListProps = useMemo(() => ({
+    bounces: true,
+    keyExtractor: (message) => message.id,
+    style: styles.messagesList,
+    onEndReached: loadMoreMessage,
+    onEndReachedThreshold: 0.1,
+    renderItem: renderItem,
+    ListFooterComponent: footerComponent,
+    refreshControl: refreshControl,
+    showsVerticalScrollIndicator: false,
+    data: filteredMessages,
+    contentContainerStyle: styles.messagesContent,
+    removeClippedSubviews: true, // Performance optimization
+    maxToRenderPerBatch: 10, // Render fewer items per batch
+    windowSize: 10, // Reduce memory footprint
+    initialNumToRender: 15, // Render fewer items initially
+    getItemLayout: null, // Let FlatList calculate (better for dynamic heights)
+  }), [loadMoreMessage, renderItem, footerComponent, refreshControl, filteredMessages]);
+
+  // Memoized empty state check
+  const shouldShowEmptyState = useMemo(() => 
+    filteredMessages.length < 1 && !initialLoad, 
+    [filteredMessages.length, initialLoad]
+  );
 
   return (
-    <View>
-      <FlatList
-            bounces={true}
-            keyExtractor={(message) => message.id}
-            style={styles.container}
-            onEndReached={loadMoreMessage}
-            onEndReachedThreshold={0.1}
-            renderItem={renderItem}
-            ListFooterComponent={footerComponent}
-            data={messages}/>
+    <View style={styles.container}>
+      <FlatList {...flatListProps} />
 
+      {initialLoad && <LoadingComponent colorScheme={colorScheme} />}
 
-            {messages.length < 1 && !initialLoad && <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,position:'absolute',alignSelf:'center',marginTop:'50%'}}>No requests yet</Text>}
+      {shouldShowEmptyState && (
+        <RequestsEmptyStateComponent searchQuery={searchQuery} colorScheme={colorScheme} />
+      )}
 
             <MemoizedBottomSheetMessaging 
               selectedMessage={selectedMessage}
@@ -406,8 +518,11 @@ const Requestmessages = () => {
               handleMarkAsRead={handleMarkAsRead}
               handleDelete={handleDelete}
               handleBlock={handleBlock}
+        handleAcceptRequest={handleAcceptRequest}
+        handleDeclineRequest={handleDeclineRequest}
+        colorScheme={colorScheme}
+        page="requests"
             />
-
 
             {dialog && <MemoizedDialog 
                 dialog={dialog} 
@@ -416,125 +531,47 @@ const Requestmessages = () => {
                 blockinguserinfo={{postcreatorimage:selectedMessage.photo, postcreatorusername:selectedMessage.username}} 
               />}
 
-              {initialLoad && <ActivityIndicator size='large' color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} style={{alignSelf:'center' ,marginTop:'40%', position:'absolute'}} />}
-
-            {/* <BottomSheet  
-            enablePanDownToClose={true} 
-            ref={bottomSheetRef}
-            index={initialSnapIndex}
-            backgroundStyle={{backgroundColor:Colors.dark_gray}}
-            handleIndicatorStyle={{backgroundColor:'#fff'}}
-            snapPoints={snapPoinst}>
-
-              <View style={{margin:10}}>
-                <Text style={{fontSize:20,color:'white',fontWeight:'bold',alignSelf:'center',marginBottom:10}}>
-                  {selectedMessage && selectedMessage.username}
-                </Text>
-
-                <View style={{width:'100%',height:1,backgroundColor:'white'}}/>
-
-                {(selectedMessage!== null && !selectedMessage.isread) && <TouchableOpacity onPress={handleMarkAsRead}>
-                  <Text style={{fontSize:20,color:'white',marginTop:10}}>
-                    Mark as read
-                  </Text>
-                </TouchableOpacity>}
-
-                <TouchableOpacity onPress={handleDelete}>
-                  <Text style={{fontSize:20,color:'white',marginTop:10}}>
-                    Delete
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={handleBlock}>
-                  <Text style={{fontSize:20,color:'red',marginTop:10}}>
-                    Block
-                  </Text>
-                </TouchableOpacity>
-                
-
-              </View>
-
-                
-
-            </BottomSheet> */}
-
-            {/* <Dialog onclose={() => setDialog(false)}  isVisible={dialog}>
-
-              <View style={{padding:10,backgroundColor:Colors.dark_gray,borderRadius:10}}>
-
-                <View style={{flexDirection:'row',alignItems:'center'}}>
-
-                  <Image
-                    source={{ uri: selectedMessage.photo || getDefaultReturnUrl }}
-                    style={styles.profileImage}
-                  />
-
-                  <Text style={{color:'white',fontSize:20,marginStart:3}}>{selectedMessage.username  || 'user'}</Text>
-
-
-                </View>
-
-
-                <Text style={{color:'white',margin:5,fontSize:20,marginBottom:15}}>Proceed to block user?</Text>
-
-
-                <View style={{flexDirection:"row"}}>
-
-                  <TouchableOpacity onPress={handleBlockUserConfirmation}>
-
-                    <View  style={{flexDirection:'row'}}>
-
-                      <Image style={{width:30,height:30,tintColor:'red'}} source={require('@/assets/icons/block.png')}/>
-
-                      <Text style={{color:'red',fontSize:20}}>Proceed</Text>
-
-                    </View>
-
-                  </TouchableOpacity>
-
-                  <Text style={{flex:1}}></Text>
-
-                  <TouchableOpacity  onPress={() => setDialog(false)}>
-
-                  <Text style={{color:'white',fontSize:20}}>Cancel</Text>
-
-                  </TouchableOpacity>
-
-
-
-                </View>
-
-
-                
-
-
-                </View>
-
-          </Dialog> */}
     </View>
   )
-}
+});
 
-export default React.memo(Requestmessages);
+Requestsmessaging.displayName = 'Requestsmessaging';
 
-
+export default Requestsmessaging;
 
 const styles = StyleSheet.create({
     container: {
-       
-       
-        height:'100%',
-      
-       
-       
-        marginHorizontal:3
-      },
-      profileImage: {
-        width: 50,
-        height: 50,
-        borderColor: 'white',
-        borderWidth: 3,
-        borderRadius: 25,
-        marginEnd: 10,
-      }
+      flex: 1,
+    },
+    messagesList: {
+      flex: 1,
+    },
+    messagesContent: {
+      paddingVertical: 8,
+    },
+    emptyState: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 32,
+    },
+    emptyStateText: {
+      fontSize: 18,
+      fontWeight: '600',
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    emptyStateSubtext: {
+      fontSize: 14,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    loadingIndicator: {
+      alignSelf:'center',
+      marginTop:'40%', 
+      position:'absolute'
+    },
+    footerContainer: {
+      margin:10
+    },
 })

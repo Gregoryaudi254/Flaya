@@ -238,7 +238,7 @@ export default function ProfileScreen() {
     }
 
     
-  },[value])
+  },[value]);
 
   const handleSubscriptionPress = () => {
     router.push({

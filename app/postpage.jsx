@@ -757,7 +757,26 @@ const postpage = () => {
 
                         </View>
 
+                        <View style={{flexDirection:'row',alignItems:'center'}}>
+
                         {timestamp !== null && <Text style={{fontSize:15, color:'gray',marginTop:1}}>{timeAgoPost(timestamp)}</Text>}
+                        {(post.isshowinglocation || iscurrentuserpost) && <TouchableOpacity onPress={handleGoogleMaps}>
+
+                          <View style={{borderRadius:5, marginLeft:10, marginTop:5, backgroundColor:Colors.blue,alignItems:'center',flexDirection:'row', paddingHorizontal:10, marginRight:10}}>
+                            <Image style={{height:25,width:25, tintColor:'white'}} source={require('@/assets/icons/right-arrow.png')}/>
+
+                            <View style={{height:30,width:1,backgroundColor:'white',marginLeft:10,marginRight:10}}/>
+
+                            <Image style={{height:25,width:25}} source={require('@/assets/icons/map.png')}/>
+
+                          </View>
+
+
+                          </TouchableOpacity>}
+
+                        </View>
+
+                        
 
                       </View>
 
@@ -770,17 +789,12 @@ const postpage = () => {
                     </TouchableOpacity> : <View></View>
                     }
 
-                    {(timestamp !== null && iscurrentuserpost) && <Text style={{fontSize:15, color:'gray'}}>{timeAgoPost(timestamp)}</Text>}
+                 { iscurrentuserpost && <View style={{flexDirection:'row',alignItems:'center'}}>
 
-                </View>
-
-               
-              
-                <View style={{flexDirection:'row',alignItems:'center'}}>
-
+                  {(timestamp !== null) && <Text style={{fontSize:15, color:'gray'}}>{timeAgoPost(timestamp)}</Text>}
                   {(post.isshowinglocation || iscurrentuserpost) && <TouchableOpacity onPress={handleGoogleMaps}>
 
-                    <View style={{borderRadius:5, backgroundColor:Colors.blue,alignItems:'center',flexDirection:'row', paddingHorizontal:10, marginRight:10}}>
+                    <View style={{borderRadius:5, marginLeft:10, marginTop:5, backgroundColor:Colors.blue,alignItems:'center',flexDirection:'row', paddingHorizontal:10, marginRight:10}}>
                       <Image style={{height:25,width:25, tintColor:'white'}} source={require('@/assets/icons/right-arrow.png')}/>
 
                       <View style={{height:30,width:1,backgroundColor:'white',marginLeft:10,marginRight:10}}/>
@@ -790,8 +804,19 @@ const postpage = () => {
                     </View>
 
 
-                  </TouchableOpacity>}
+                    </TouchableOpacity>}
 
+                  </View>}
+
+                    
+
+                </View>
+
+               
+              
+                <View style={{flexDirection:'row',alignItems:'center'}}>
+
+                  
                   
                   <Menu style={{right:10, marginLeft:10}} renderer={Popover}>
                     <MenuTrigger>

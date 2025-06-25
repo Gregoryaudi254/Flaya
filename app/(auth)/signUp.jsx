@@ -45,9 +45,7 @@ const signUp = () => {
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('devicecreatorid', '==', uniqueID));
     const snapshot = await getDocs(q);
-    // return snapshot.docs.length < 4;
-
-    return true;
+     return snapshot.docs.length < 4;
   }
 
   const checkinput = async () => {
@@ -186,7 +184,7 @@ const signUp = () => {
                 style={[styles.input, {color: isDark ? Colors.light_main : Colors.dark_main}]}
                 onChangeText={setname}
                 value={name}
-                placeholder="Full Name"
+                placeholder="Name"
                 placeholderTextColor='gray'
               />
             </View>

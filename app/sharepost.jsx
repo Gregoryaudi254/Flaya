@@ -248,7 +248,7 @@ const SharePostScreen = () => {
            const selectedImages = result.assets.map((asset) => asset.uri);
            setPickedImages(selectedImages);
         } 
-    };
+      };
       
     const pickVideoAsync = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
@@ -307,7 +307,7 @@ const SharePostScreen = () => {
               if (item.contentType === 'image') {
                   for (const uri of content) {
                     const compressedUri = await compressImage(uri);
-                    
+
                     const fileName = compressedUri.split('/').pop();
                     const response = await fetch(compressedUri);
                       const storageRef = ref(storage, `uploads/images/${credentials.user.uid}/${fileName}`);
@@ -318,7 +318,7 @@ const SharePostScreen = () => {
 
                      const mediaBlob = await response.blob();
                     const uploadTask = uploadBytesResumable(storageRef, mediaBlob);
-  
+      
                       await new Promise((resolve, reject) => {
                         uploadTask.on(
                               'state_changed',
@@ -393,8 +393,8 @@ const SharePostScreen = () => {
                             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                           urls.push(downloadURL);
                             resolve();
-                      }
-                    );
+                        }
+                      );
                   });
               }
               
@@ -435,7 +435,7 @@ const SharePostScreen = () => {
 
       const generateUniquePostId = () => {
       return Math.random().toString(36).substr(2, 9);
-    };
+       };
 
     const handleSharePost = () => {
       if (contentType === null) {
@@ -503,7 +503,7 @@ const SharePostScreen = () => {
               name="videocam"
               size={24}
               color={isDark ? 'white' : "black"}
-            />
+                  />
               </TouchableOpacity>
               ),
             });

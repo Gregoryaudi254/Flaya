@@ -297,6 +297,13 @@ const StoriesItem = React.memo(({ activeStory, item, isStoriesVisible, stories }
     }
   }, [activeStory, item.id, activeThread.content, addViewedThread, goToNextThread,durationTime]);
 
+   // Memoize expensive string operations
+   const displayUsername = useMemo(() => {
+    const maxLength = 12;
+    
+    return item.username.length > maxLength ? item.username.slice(0, maxLength) + '..' : item.username;
+  }, [item.username]);
+
   return (
     <Animatable.View style={{ width: ITEM_SIZE }} duration={1000}>
       <View style={styles.mainView}>
@@ -335,7 +342,7 @@ const StoriesItem = React.memo(({ activeStory, item, isStoriesVisible, stories }
           <TouchableOpacity onPress={onProfilePress}>
             <View style={{flexDirection:'row',alignItems:'center'}}>
               <Image source={{ uri: item.userProfileImage }} style={{ width: 40, height: 40, borderColor: 'white', borderWidth: 2, borderRadius: 15, marginEnd: 10 }} />
-              <Text style={{ fontSize: 20, color: 'white' }}>{item.username}</Text>
+              <Text style={{ fontSize: 20, color: 'white' }}>{displayUsername}</Text>
             </View>
           </TouchableOpacity>
           

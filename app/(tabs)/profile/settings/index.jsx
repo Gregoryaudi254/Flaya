@@ -74,25 +74,25 @@ const index = () => {
   const { user, logout } = useAuth();
 
   useEffect(() => {
-    const getSettings = async () => {
-      let settings = await getData("@settings");
+  const getSettings = async () => {
+    let settings = await getData("@settings");
       settings = settings || {};
 
-      const notification = settings.notification || {};
+    const notification = settings.notification || {};
 
-      setLikes(notification.likes || false);
-      setNewSubscriber(notification.subscribers || false);
-      setDirectMessaging(notification.messages || false);
-      setComment(notification.comments || false);
+    setLikes(notification.likes || false);
+    setNewSubscriber(notification.subscribers || false);
+    setDirectMessaging(notification.messages || false);
+    setComment(notification.comments || false);
 
       dispatch(setValues(settings.profileview || 'everyone'));
-      
+
       // Get user info
       const userInfo = await getData('@profile_info');
       setUserInfo(userInfo);
-    }
+  }
 
-    getSettings();
+  getSettings();
   }, [dispatch]);
 
   const router = useRouter();
@@ -191,7 +191,7 @@ const index = () => {
       await updateDoc(ref, {
         [`settings.notification.${value}`]: !status
       });
-      
+
       let settings = await getData('@settings');
       settings = settings || {};
       const notification = settings.notification || {};
@@ -286,18 +286,18 @@ const index = () => {
             accountType === "business" ? (
               <View style={styles.businessBadge}>
                 <Text style={styles.businessBadgeText}>Business</Text>
-              </View>
+          </View>
             ) : accountType === "pending" ? (
               <View style={styles.pendingBadge}>
                 <Text style={styles.pendingBadgeText}>Pending</Text>
-              </View>
+          </View>
             ) : accountType === "personal" && (
               <View style={styles.settingRight}>
                 <Text style={[styles.settingValue, { color: isDark ? '#AAAAAA' : '#8A8A8E', marginRight: 5 }]}>
                   Personal
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color={isDark ? '#AAAAAA' : '#C8C8C8'} onPress={handleBusinessAccountPress} />
-              </View>
+          </View>
             )
           }
         />
@@ -314,8 +314,8 @@ const index = () => {
               ios_backgroundColor={isDark ? '#333333' : '#E9E9EA'}
               onValueChange={() => {
                 const newLikes = !isLikes;
-                handleSettingsNotifiaction("likes", !newLikes);
-                setLikes(newLikes);
+            handleSettingsNotifiaction("likes", !newLikes);
+            setLikes(newLikes);
               }}
               value={isLikes || false}
             />
@@ -330,7 +330,7 @@ const index = () => {
               trackColor={{ false: isDark ? '#333333' : '#E9E9EA', true: '#34C759' }}
               thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : (isNewSubscriber ? '#FFFFFF' : '#F4F3F4')}
               ios_backgroundColor={isDark ? '#333333' : '#E9E9EA'}
-              onValueChange={() => {
+           onValueChange={() => {
                 const newSubs = !isNewSubscriber;
                 handleSettingsNotifiaction("subscribers", !newSubs);
                 setNewSubscriber(newSubs);
@@ -348,7 +348,7 @@ const index = () => {
               trackColor={{ false: isDark ? '#333333' : '#E9E9EA', true: '#34C759' }}
               thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : (isDirectMessaging ? '#FFFFFF' : '#F4F3F4')}
               ios_backgroundColor={isDark ? '#333333' : '#E9E9EA'}
-              onValueChange={() => {
+           onValueChange={() => { 
                 const directMess = !isDirectMessaging;
                 handleSettingsNotifiaction("messages", !directMess);
                 setDirectMessaging(directMess);
@@ -367,7 +367,7 @@ const index = () => {
               trackColor={{ false: isDark ? '#333333' : '#E9E9EA', true: '#34C759' }}
               thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : (isComment ? '#FFFFFF' : '#F4F3F4')}
               ios_backgroundColor={isDark ? '#333333' : '#E9E9EA'}
-              onValueChange={() => {
+           onValueChange={() => { 
                 const comment = !isComment;
                 handleSettingsNotifiaction("comments", !comment);
                 setComment(comment);
@@ -472,7 +472,7 @@ const index = () => {
                 }}>
                   Cancel
                 </Text>
-              </TouchableOpacity>
+        </TouchableOpacity>
 
               <TouchableOpacity 
                 style={{
@@ -491,17 +491,17 @@ const index = () => {
                 }}>
                   Log Out
                 </Text>
-              </TouchableOpacity>
-            </View>
+        </TouchableOpacity>
+          </View>
           </View>
         ) : (
           <ActivityIndicator size="large" color="white" />
         )}
-      </CustomDialog>
+        </CustomDialog>
     </ScrollView>
   );
 };
-
+    
 export default index;
 
 const styles = StyleSheet.create({

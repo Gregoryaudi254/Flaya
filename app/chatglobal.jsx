@@ -25,8 +25,6 @@ import { useSelector, useDispatch } from 'react-redux';
 
 import { removeMessage } from '@/slices/requestmessageSlice';
 
-import FloatingButton from '@/components/FloatingButton';
-
 import ImageView from "react-native-image-viewing";
 import { getData} from '@/constants/localstorage';
 import { doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, getDoc, collection ,updateDoc,where, getDocs, limit, startAfter, writeBatch} from 'firebase/firestore';
@@ -40,15 +38,121 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import * as Clipboard from 'expo-clipboard';
 import { setData } from '@/slices/dataChangeSlice';
 
+import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
+import FloatingButton from '@/components/FloatingButton';
 
-const chatglobal = () => {
+// Memoized typing indicator component
+const TypingIndicator = React.memo(({ visible, oppUsername, colorScheme, animations }) => {
+  if (!visible) return null;
+  
+  return (
+    <Animated.View style={[styles.typingIndicator, {
+      backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+    }]}>
+      <View style={styles.typingDots}>
+        <Animated.View style={[styles.typingDot, { 
+          backgroundColor: Colors.blue,
+          opacity: animations.dot1 
+        }]} />
+        <Animated.View style={[styles.typingDot, { 
+          backgroundColor: Colors.blue,
+          opacity: animations.dot2 
+        }]} />
+        <Animated.View style={[styles.typingDot, { 
+          backgroundColor: Colors.blue,
+          opacity: animations.dot3 
+        }]} />
+      </View>
+      <Text style={[styles.typingText, {
+        color: colorScheme === 'dark' ? '#888' : '#666'
+      }]}>
+        {oppUsername} is typing...
+      </Text>
+    </Animated.View>
+  );
+});
+TypingIndicator.displayName = 'TypingIndicator';
+
+// Memoized reply container component
+const ReplyContainer = React.memo(({ isReplying, selectedItem, userInfo, oppUser, colorScheme, onCloseReply }) => {
+  if (!isReplying || !selectedItem) return null;
+
+  return (
+    <View style={[styles.modernReplyContainer, {
+      backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+      borderLeftColor: Colors.blue,
+    }]}>
+      <View style={styles.replyHeader}>
+        <Ionicons name="return-up-forward" size={16} color={Colors.blue} />
+        <Text style={[styles.replyLabel, { color: Colors.blue }]}>
+          Replying to {selectedItem.senderid === userInfo?.uid ? 'yourself' : oppUser.username}
+        </Text>
+        
+        <TouchableOpacity onPress={onCloseReply} style={styles.closeReplyButton}>
+          <Ionicons 
+            name="close" 
+            size={18} 
+            color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} 
+          />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.replyContent}>
+        {selectedItem.messageType === 'text' ? (
+          <Text numberOfLines={2} style={[styles.replyText, {
+            color: colorScheme === 'dark' ? '#AAA' : '#666'
+          }]}>
+            {selectedItem.message}
+          </Text>
+        ) : selectedItem.messageType === 'image' ? (
+          <View style={styles.replyImageContainer}>
+            <Image style={styles.replyImage} source={{uri: selectedItem.images[0]}} />
+            <Text style={[styles.replyText, {
+              color: colorScheme === 'dark' ? '#AAA' : '#666'
+            }]}>
+              Photo
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.replyLocationContainer}>
+            <Ionicons
+              name="location"
+              size={16}
+              color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}
+            />
+            <Text numberOfLines={1} style={[styles.replyText, {
+              color: colorScheme === 'dark' ? '#AAA' : '#666'
+            }]}>
+              {selectedItem.location.address}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+});
+ReplyContainer.displayName = 'ReplyContainer';
+
+// Memoized footer component
+const ChatFooterComponent = React.memo(({ loadingmore }) => {
+  return loadingmore ? (
+    <View style={{marginTop: 10}}>
+      <ActivityIndicator size="large" color="white" />
+    </View>
+  ) : null;
+});
+ChatFooterComponent.displayName = 'ChatFooterComponent';
+
+const chatglobal = React.memo(() => {
 
     const dispatch = useDispatch();
     const colorScheme = useColorScheme();
-
     const toast = useToast();
+    const navigation = useNavigation();
 
-    function showToast (message){
+    // Memoized toast function
+    const showToast = useCallback((message) => {
       toast.show(message, {
         type: "normal",
         placement: "bottom",
@@ -56,37 +160,154 @@ const chatglobal = () => {
         offset: 30,
         animationType: "zoom-in",
       });
-    };
-    
+    }, [toast]);
 
-
-   
-
-    const [isChatAccepted ,setChatAccepted] = useState(null);
-
-    const [imageViewerVisible, setimageViewerVisible] = useState(false);
-
-    const [selectedImages, setselectedImages] = useState(null);
-    const [isrequest,setisRequest] = useState(null);
-    const [isInteracted,setInteracted] = useState(false);
-
-
-
+    // Parse opponent user data
     const { data } = useLocalSearchParams();
-
-    const oppUser = JSON.parse(data);
+    const oppUser = useMemo(() => JSON.parse(data), [data]);
     const isRequestaccepted = oppUser.requeststatus;
 
-    //console.log("open " + JSON.stringify(oppUser))
+    console.log("isRequestaccepted" + JSON.stringify(isRequestaccepted))
 
+    // Grouped state for better performance
+    const [chatState, setChatState] = useState({
+      isChatAccepted: null,
+      isrequest: null,
+      isInteracted: false,
+      hasStories: null,
+      oppuseronline: null,
+      oppuserlastseen: null,
+      oppusertyping: null,
+      iscurrentUserBlocked: false,
+    });
 
+    const [uiState, setUiState] = useState({
+      text: '',
+      isTyping: false,
+      showDialog: false,
+      dialogType: 'popup',
+      isReplying: false,
+      imageViewerVisible: false,
+      isBottomReached: true,
+      loadingmore: false,
+      textdeleteStatus: '',
+    });
+
+    const [dataState, setDataState] = useState({
+      userInfo: null,
+      selectedItem: null,
+      selectedImages: null,
+      userLocation: {
+        latitude: -1.2921,  // Nairobi coordinates as default
+        longitude: 36.8219,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+      },
+      address: null,
+      oppuserprofile: null,
+      incomingMessage: null,
+    });
+
+    // Separate independent state for chats and pagination
+    const [chats, setChats] = useState([]);
+    const [lastVisibleChat, setLastVisible] = useState(null);
+
+    // Refs
+    const flatListRef = useRef(null); 
+    const bottomSheetRef = useRef(null);
+    const typingTimeoutRef = useRef(null);
+    const isFirstSnapshot = useRef(true);
+
+    // Memoized constants
+    const initialSnapIndex = useMemo(() => -1, []);
+    const snapPoinst = useMemo(() => ['45%', '75%'], []);
+
+    // Animated typing dots
+    const typingAnimation1 = useRef(new Animated.Value(0.4)).current;
+    const typingAnimation2 = useRef(new Animated.Value(0.4)).current;
+    const typingAnimation3 = useRef(new Animated.Value(0.4)).current;
+
+    // Optimized typing animation effect
+    useEffect(() => {
+      if (chatState.oppusertyping) {
+        const animateTyping = () => {
+          Animated.sequence([
+            Animated.timing(typingAnimation1, { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.timing(typingAnimation2, { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.timing(typingAnimation3, { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.timing(typingAnimation1, { toValue: 0.4, duration: 300, useNativeDriver: true }),
+            Animated.timing(typingAnimation2, { toValue: 0.4, duration: 300, useNativeDriver: true }),
+            Animated.timing(typingAnimation3, { toValue: 0.4, duration: 300, useNativeDriver: true }),
+          ]).start(() => {
+            if (chatState.oppusertyping) animateTyping();
+          });
+        };
+        animateTyping();
+      } else {
+        typingAnimation1.setValue(0.4);
+        typingAnimation2.setValue(0.4);
+        typingAnimation3.setValue(0.4);
+      }
+    }, [chatState.oppusertyping, typingAnimation1, typingAnimation2, typingAnimation3]);
+
+    // Optimized address fetch effect
+    useEffect(() => {
+      const fetchAddress = async () => {
+        if (dataState.userLocation) {
+          const coords = { 
+            latitude: dataState.userLocation.latitude, 
+            longitude: dataState.userLocation.longitude 
+          };
+
+          try {
+            const [address] = await Location.reverseGeocodeAsync(coords);
+            setDataState(prev => ({ ...prev, address }));
+          } catch (error) {
+            console.error("Error during reverse geocoding:", error);
+          }
+        }
+      };
+
+      fetchAddress();
+    }, [dataState.userLocation]);
+
+    // Optimized region change handler
+    const handleRegionChangeComplete = useCallback((region) => {
+      setDataState(prev => ({ ...prev, userLocation: region }));
+    }, []);
+
+    // Optimized typing animations
+    const typingAnimations = useMemo(() => ({
+      dot1: typingAnimation1,
+      dot2: typingAnimation2,
+      dot3: typingAnimation3,
+    }), [typingAnimation1, typingAnimation2, typingAnimation3]);
+
+    // Optimized typing handler
+    const handleTyping = useCallback(async (inputText) => {
+      setUiState(prev => ({ ...prev, text: inputText, isTyping: !!inputText }));
+
+      if (!chatState.isInteracted) return;
+  
+      const oppMessageRef = doc(db, `users/${oppUser.uid}/messages/${dataState.userInfo.uid}`);
+  
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+  
+      if (inputText) {
+        await updateDoc(oppMessageRef, { typing: true });
+        typingTimeoutRef.current = setTimeout(async () => {
+          await updateDoc(oppMessageRef, { typing: false });
+        }, 3000);
+      } else {
+        await updateDoc(oppMessageRef, { typing: false });
+      }
+    }, [chatState.isInteracted, oppUser.uid, dataState.userInfo?.uid]);
+    
    
 
-    const [userInfo,setUserInfo] = useState();
-
     const getRequestState = async() => {
-
-      
       const profileInfo = await getData('@profile_info');
       console.log(profileInfo.uid +" and " + JSON.stringify(oppUser.uid))
       const messageRef = doc(db,`users/${profileInfo.uid}/messages/${oppUser.uid}`);
@@ -98,253 +319,278 @@ const chatglobal = () => {
          // Set `isrequestaccepted` only if it exists in the data
 
          if (data.isrequestaccepted !== undefined) {
-          setChatAccepted(data.isrequestaccepted);
+          setChatState(prev => ({ ...prev, isChatAccepted: data.isrequestaccepted }));
           } else {
-              setChatAccepted(true);
+              setChatState(prev => ({ ...prev, isChatAccepted: true }));
           }
 
           const isrequest = data.isrequest;
-          setisRequest(isrequest);
+          setChatState(prev => ({ ...prev, isrequest: isrequest }));
 
       
       }else {
-        setChatAccepted(true);
-        setisRequest(false);
+        setChatState(prev => ({ ...prev, isChatAccepted: true, isrequest: false }));
       }
-
-      
-
     }
-
-    
-
-    
-
-    
 
     useEffect(()=>{
       if (isRequestaccepted !== null) {
-        setisRequest(oppUser.isrequest)
-
-        console.log("is requesting "+oppUser.isrequest)
-        
-        setChatAccepted(isRequestaccepted);
+        setChatState(prev => ({ ...prev, isrequest: oppUser.isrequest }));
+        setChatState(prev => ({ ...prev, isChatAccepted: isRequestaccepted }));
       }else{
         console.log("running here")
         getRequestState();
       }
-
     },[])
 
-    const navigation = useNavigation();
-
-    const handleHeaderLeftPress = () =>{
-
+    // Optimized event handlers with useCallback
+    const handleHeaderLeftPress = useCallback(() => {
       router.back();
-    }
+    }, []);
 
-    const [hasStories,setHasstories] = useState(null)
-    const [text,setText] = useState('')
-
-    const [isTyping,setTyping] = useState(false);
-
-    const [userLocation, setUserLocation] = useState(null
-            );
-
-    const [address,setAdress] = useState(null)  
-    
-  
-    const [chats,setChats] = useState([])
-    const flatListRef = useRef(null); 
-
-    const [showDialog,setShowDialog] = useState(false)
-
-    const [selectedItem,setSelectedItem] = useState(null)
-
-    const [isReplying,setReplying] = useState(false)
-
-    const [dialogType,setDialogType] = useState('popup')
-
-    const [isBottomReached, setIsBottomReached] = useState(true);
-
-    const [oppusertyping,setoppusertyping] = useState(null)
-
-   
-
-
-
-  
-    const typingTimeoutRef = useRef(null);
-
-
-    const handleTyping = async (inputText) => {
-      setText(inputText);
-
-      // Handle typing status for icon change
-      if (inputText){
-        setTyping(true)
-      }else{setTyping(false)}
-
-      if (!isInteracted) return;
-  
-      const oppMessageRef = doc(db,`users/${oppUser.uid}/messages/${userInfo.uid}`);
-  
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-  
-      if (inputText) {
-        // Update Firebase that the user is typing
-        await updateDoc(oppMessageRef, {typing:true});
-  
-        // Clear typing status after 2 seconds of inactivity
-        typingTimeoutRef.current = setTimeout(async () => {
-          await updateDoc(oppMessageRef, {typing:false})
-        }, 2000);
-      } else {
-        // If the input is cleared, update Firebase immediately
-        await updateDoc(oppMessageRef, {typing:false})
-      }
-    };
-  
-
-
-    useEffect(() => {
-
-      const fetchAddress = async () => {
-
-        if (userLocation) {
-          const coords = { latitude: userLocation.latitude, longitude: userLocation.longitude };
-  
-          // Perform reverse geocoding
-          try {
-            const [address] = await Location.reverseGeocodeAsync(coords);
-
-            setAdress(address)
-
-            console.log(address)
-            
-          } catch (error) {
-            console.error("Error during reverse geocoding:", error);
-          }
-        }
-      };
-  
-      fetchAddress();
-    }, [userLocation]);
-
-
-    const bottomSheetRef = useRef(null);
-    const initialSnapIndex = -1;
+    const handleProfilePress = useCallback(() => {
+      router.push({
+        pathname: '/oppuserprofile',
+        params: { uid: oppUser.uid }
+      });
+    }, [oppUser.uid]);
 
     const handleLocationPress = useCallback(() => {
       bottomSheetRef.current?.snapToIndex(0);
     }, []);
 
-
-    const [lastVisibleChat,setLastVisible] = useState(null);
-    const isFirstSnapshot = useRef(true);
-
-    useEffect(() => {
-      isFirstSnapshot.current = true;
-      // Set isFirstSnapshot to false after 3 seconds (adjust as needed)
-      const timer = setTimeout(async() => {
-          isFirstSnapshot.current = false;
-          console.log("isFirstSnapshot set to false");
-    
-      }, 9000);
-
-      // Clean up the timer on component unmount
-      return () => clearTimeout(timer);
+    const handleCloseDialog = useCallback(() => {
+      setUiState(prev => ({ ...prev, showDialog: false }));
     }, []);
 
-    const listenNewMessages = async (callback) => {
+    const handleReply = useCallback(() => {
+      setUiState(prev => ({ ...prev, isReplying: !prev.isReplying, showDialog: false }));
+    }, []);
 
+    const scrollToChatItem = useCallback((chatId) => {
+      const index = chats.findIndex((chat) => chat.id === chatId);
+      if (index !== -1) {
+        flatListRef.current?.scrollToIndex({ animated: true, index });
+      }
+    }, [chats]);
+
+    const scrollToBottom = useCallback(() => {
+      flatListRef.current?.scrollToIndex({ animated: true, index: 0 });
+    }, []);
+
+    const openGoogleMaps = useCallback((latitude, longitude) => {
+      const url = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+      Linking.openURL(url).catch(err => console.error("Error opening Google Maps", err));
+    }, []);
+
+    // Optimized item press handler
+    const handleItemPress = useCallback((item) => {
+      if (item.messageType === "image") {
+        const objectList = item.images.map(uri => ({ uri }));
+        setDataState(prev => ({ ...prev, selectedImages: objectList }));
+        setUiState(prev => ({ ...prev, imageViewerVisible: true }));
+      } else if (item.messageType === "location") {
+        openGoogleMaps(item.location.latitude, item.location.longitude);
+      }
+    }, [openGoogleMaps]);
+
+    // Optimized long press handler
+    const handleLongPress = useCallback(async (item) => {
+      if (item.isdeleted) return;
+
+      const userinfo = await getData('@profile_info');
+      const deleteStatus = userinfo.uid === item.senderid ? "Delete for everyone" : "Delete for you";
+
+      setUiState(prev => ({ 
+        ...prev, 
+        isReplying: false, 
+        showDialog: true,
+        dialogType: 'popup',
+        textdeleteStatus: deleteStatus
+      }));
+      setDataState(prev => ({ ...prev, selectedItem: item }));
+    }, []);
+
+    // Optimized swipe reply handler
+    const handleSwipeReply = useCallback((message) => {
+      setDataState(prev => ({ ...prev, selectedItem: message }));
+      setUiState(prev => ({ ...prev, isReplying: true }));
+      if (Haptics && Haptics.impactAsync) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+    }, []);
+
+    // Optimized render item with memoization
+    const renderItem = useCallback(({ item, index }) => (
+      <ScalablePressable
+        item={item}
+        onReplySelect={scrollToChatItem}
+        currentuserid={dataState.userInfo?.uid}
+        onPress={() => handleItemPress(item)}
+        prevItem={(index + 1) < chats.length ? chats[index + 1] : null}
+        onLongPress={() => handleLongPress(item)}
+        onSwipeReply={handleSwipeReply}
+      />
+    ), [dataState.userInfo?.uid, chats, scrollToChatItem, handleItemPress, handleLongPress, handleSwipeReply]);
+
+    // Optimized load more function
+    const loadMoreChats = useCallback(async () => {
+      if (uiState.loadingmore || !lastVisibleChat) return;
+
+      setUiState(prev => ({ ...prev, loadingmore: true }));
+      
+      try {
+      const profileInfo = await getData('@profile_info');
+      const chatRef = collection(db, `users/${profileInfo.uid}/messages/${oppUser.uid}/chats`);
+        const q = query(chatRef, orderBy('timestamp', 'desc'), startAfter(lastVisibleChat), limit(10));
+
+        const moreSnapshot = await getDocs(q);
+        const moreChats = moreSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        status: 'sent',
+    }));
+
+        setLastVisible(moreSnapshot.docs[moreSnapshot.docs.length - 1]);
+        setChats(prevChats => [...prevChats, ...moreChats]);
+      } catch (error) {
+        console.error('Error loading more chats:', error);
+      } finally {
+        setUiState(prev => ({ ...prev, loadingmore: false }));
+      }
+    }, [uiState.loadingmore, lastVisibleChat, oppUser.uid]);
+
+    // Memoized header component for FlatList
+    const headerComponent = useMemo(() => 
+      <ChatFooterComponent loadingmore={uiState.loadingmore} />, 
+      [uiState.loadingmore]
+    );
+
+   
+    // Optimized Firebase listeners
+    useEffect(() => {
+      let unsubscribeProfile = null;
+      let unsubscribeMessages = null;
+
+      const setupFirebaseListeners = async () => {
+        try {
+          const profileInfo = await getData('@profile_info');
+          if (!profileInfo) return;
+
+          setDataState(prev => ({ ...prev, userInfo: profileInfo }));
+
+          // Listen to opponent's profile changes
+          const oppProfileRef = doc(db, 'users', oppUser.uid);
+          unsubscribeProfile = onSnapshot(oppProfileRef, (doc) => {
+            if (doc.exists()) {
+              const profileData = doc.data();
+              setChatState(prev => ({
+                ...prev,
+                oppuseronline: profileData.isonline,
+                oppuserlastseen: profileData.lastactive,
+                hasStories: profileData.hasStories || false,
+                iscurrentUserBlocked: profileData.blockedUsers?.includes(profileInfo.uid) || false
+              }));
+              setDataState(prev => ({ ...prev, oppuserprofile: profileData }));
+            }
+          });
+
+          // Listen to message metadata
+          const messageRef = doc(db, `users/${profileInfo.uid}/messages/${oppUser.uid}`);
+          unsubscribeMessages = onSnapshot(messageRef, (doc) => {
+            if (doc.exists()) {
+             
+              const messageData = doc.data();
+              setChatState(prev => ({
+                ...prev,
+                isChatAccepted: messageData.isrequestaccepted,
+                isrequest: messageData.isrequest,
+                isInteracted: true,
+                oppusertyping: messageData.typing || false
+              }));
+            }
+          });
+            
+          } catch (error) {
+          console.error('Error setting up Firebase listeners:', error);
+        }
+      };
+
+      setupFirebaseListeners();
+
+      // Cleanup function
+      return () => {
+        if (unsubscribeProfile) unsubscribeProfile();
+        if (unsubscribeMessages) unsubscribeMessages();
+      };
+    }, [oppUser.uid]);
+
+    // Listen to new messages with user's specific flow
+    const listenNewMessages = useCallback(async (callback) => {
       const profileInfo = await getData('@profile_info');
 
-      setUserInfo(profileInfo)
       const chatRef = collection(db, `users/${profileInfo.uid}/messages/${oppUser.uid}/chats`);
-      const q = query(chatRef, orderBy('timestamp', 'desc'));
 
-      const initialLoadquery = query(chatRef, orderBy('timestamp', 'desc'), limit(15));
-      const initialSnapshot = await getDocs(initialLoadquery);
+      // Initial load with limit
+      const initialLoadQuery = query(chatRef, orderBy('timestamp', 'desc'), limit(15));
+      const initialSnapshot = await getDocs(initialLoadQuery);
 
       const initialChats = initialSnapshot.docs.map(doc => ({
         ...doc.data(),
         status: 'sent',
     }));
 
-
     setLastVisible(initialSnapshot.docs[initialSnapshot.docs.length - 1]); // Save the last document
     callback(initialChats, true);
 
+      // Record timestamp after initial load to prevent loading all messages
+      const loadTimestamp = new Date();
 
-      // Real-time listener to detect new documents
-      return onSnapshot(q, (snapshot) => {
+      // Real-time listener with timestamp filter to detect only new documents
+      const realtimeQuery = query(chatRef, where('timestamp', '>', loadTimestamp), orderBy('timestamp', 'desc'));
 
-          console.log("something changed")
+      return onSnapshot(realtimeQuery, (snapshot) => {
+        console.log("something changed");
 
-          if (isFirstSnapshot.current) {
-            console.log("is first time")
-            return;
-          }
 
           snapshot.docChanges().forEach((change) => {
-              console.log("changed")
-             callback(change.doc.data(),false,change.type);
+          console.log("changed");
+          callback(change.doc.data(), false, change.type);
           });
       });
+    }, [oppUser.uid]);
 
-    }
-
-
-    const [oppuseronline,setoppuseronline] = useState(null);
-    const [incomingMessage,setIncomingMessage] = useState(null)
-
-
-    // chat listeners
+    // Chat listeners using user's specific flow
     useEffect(() => {
-
-
       let unsubscribe;
 
       // Call the async function and set the unsubscribe function
       (async () => {
-          unsubscribe = await listenNewMessages((messages,initial,type = null) => {
+        unsubscribe = await listenNewMessages((messages, initial, type = null) => {
               setChats((prevChats) => {
-
                 if (initial) {
-                  return messages
-                }else {
-
-
-                  console.log("here")
+              return messages;
+            } else {
+              console.log("here");
                   const chatIndex = prevChats.findIndex(message => message.id === messages.id);
 
                   if (chatIndex > -1) { // Message is already in the list
                       // Replace the existing message without changing its position
-                      console.log("replaced "+JSON.stringify(messages))
+                console.log("replaced " + JSON.stringify(messages));
                       return prevChats.map((oldmessage, index) =>
-                        index === chatIndex ? {...messages,status:'sent'} : oldmessage
+                  index === chatIndex ? { ...messages, status: 'sent' } : oldmessage
                     );
                   } else {
-
                       if (type === 'added') {
-                        console.log("added")
+                  console.log("added");
                         // New message not in the list, add it to the top
-                        setIncomingMessage(messages)
-                         return [{...messages,status:'sent'}, ...prevChats];
-                      }else if (type === 'modified') {
-                        console.log("modified")
+                  setDataState(prev => ({ ...prev, incomingMessage: messages }));
+                  return [{ ...messages, status: 'sent' }, ...prevChats];
+                } else if (type === 'modified') {
+                  console.log("modified");
                         return prevChats;
                       }
-                      
                   }
-
                 }
-
-                
-
               });
           });
       })();
@@ -352,78 +598,239 @@ const chatglobal = () => {
       return () => {
           if (unsubscribe) unsubscribe();
       };
-    },[]);
+    }, [listenNewMessages]);
 
-   
-
-    const listenTypingStatus = async (callback) => {
-
-      const profileInfo = await getData('@profile_info');
-      const chatRef = collection(db, `users/${profileInfo.uid}/messages`);
-      const q = query(chatRef, where('id','==', oppUser.uid),);
-
-      // Real-time listener to detect new documents
-      return onSnapshot(q, (snapshot) => {
-
-          if (snapshot.docs.length > 0 && isInteracted!== null) {
-            setInteracted(true);
-          }
+    // Optimized header setup
+    useLayoutEffect(() => {
+        navigation.setOptions({
+          headerShown: true,
           
-          snapshot.docChanges().forEach((change) => {
-            console.log("chat type "+change.type)
-            callback(change.doc.data());
-          });
-      });
+          headerTitle: () => (
+            <View style={[styles.modernHeaderContainer, {
+              backgroundColor: colorScheme === 'dark' ? 'transparent' : 'transparent',
+            }]}>
 
-    }
+                <TouchableOpacity  
+                  onPress={handleHeaderLeftPress}
+                  style={[styles.modernBackButton, {
+                    backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                  }]}
+                  activeOpacity={0.7}
+                >
+                    <Ionicons 
+                      name="chevron-back" 
+                      size={16} 
+                      color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} 
+                    />
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  onPress={handleProfilePress}
+                  style={styles.modernProfileSection}
+                  activeOpacity={0.8}
+                >
+
+                  <View style={styles.profileRow}>
+
+                    {/* Enhanced Profile Image with Stories */}
+                    <View style={styles.profileImageContainer}>
+                 <LinearGradient
+                         colors={chatState.hasStories ? ['#FF7F50', '#FF6347', '#FF4500'] : ['transparent', 'transparent']} 
+                         style={[styles.modernGradient, {
+                           padding: chatState.hasStories ? 3 : 0,
+                         }]}
+                         start={{ x: 0, y: 0 }}
+                         end={{ x: 1, y: 1 }}
+                >
+                    <Image
+                    resizeMode="cover"
+                          source={dataState.oppuserprofile !== null ? {uri: dataState.oppuserprofile.profilephoto} : require('@/assets/icons/user.png')}
+                          style={[styles.modernProfileImage, {
+                            borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+                            borderWidth: chatState.hasStories ? 0 : 2,
+                          }]}
+                           />
+                </LinearGradient>
+
+                      {/* Online Status Indicator */}
+                      {chatState.oppuseronline && (
+                        <View style={[styles.onlineStatusIndicator, {
+                          backgroundColor: '#22C55E',
+                          borderColor: colorScheme === 'dark' ? Colors.dark_background : Colors.light_background,
+                        }]} />
+                      )}
+                     </View>
+
+                  <View style={styles.modernUserInfo}>
+
+                    <View style={styles.usernameRow}> 
+                                
+                        <Text style={[styles.modernUsername, {
+                          color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main
+                        }]}>
+                          {oppUser.username}
+                        </Text>
+            
+                        {(oppUser.verified) && 
+                          <Image
+                                          resizeMode="contain"
+                                          source={require('@/assets/icons/verified.png')}
+                          style={{
+                            width: 20,
+                            height: 20,    
+                            paddingRight: 25,
+                          }}
+                        />
+                        }
+                              
+                    </View>
+
+                    {/* Enhanced Status Text */}
+                    {chatState.oppuserlastseen !== null && (
+                      <View style={styles.statusContainer}>
+                        {chatState.oppusertyping ? (
+                          <View style={styles.typingStatusContainer}>
+                            <View style={styles.typingDots}>
+                              <Animated.View style={[styles.miniTypingDot, { 
+                                backgroundColor: Colors.blue,
+                                opacity: typingAnimation1 
+                              }]} />
+                              <Animated.View style={[styles.miniTypingDot, { 
+                                backgroundColor: Colors.blue,
+                                opacity: typingAnimation2 
+                              }]} />
+                              <Animated.View style={[styles.miniTypingDot, { 
+                                backgroundColor: Colors.blue,
+                                opacity: typingAnimation3 
+                              }]} />
+                            </View>
+                            <Text style={[styles.modernStatusText, { color: Colors.blue }]}>
+                              typing...
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={[styles.modernStatusText, {
+                            color: chatState.oppuseronline ? '#22C55E' : (colorScheme === 'dark' ? '#888' : '#666')
+                          }]}>
+                            {chatState.oppuseronline ? 'online' : timeAgo(chatState.oppuserlastseen)}
+                          </Text>
+                        )}
+                      </View>
+                    )}
+
+                    </View>
+
+                </View>
+
+                  </TouchableOpacity>
+
+                </View>
+               
+               
+              )
+         
+        });
+    }, [
+      navigation, 
+      colorScheme, 
+      oppUser.username, 
+      oppUser.verified,
+      dataState.oppuserprofile, 
+      chatState.oppuseronline,
+      chatState.oppuserlastseen,
+      chatState.oppusertyping,
+      chatState.hasStories,
+      typingAnimation1,
+      typingAnimation2,
+      typingAnimation3,
+      handleHeaderLeftPress,
+      handleProfilePress
+    ]);
+
+    // Optimized scroll tracking
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const viewabilityConfig = useMemo(() => ({
+      itemVisiblePercentThreshold: 50,
+    }), []);
+
+    const onViewableItemsChanged = useCallback(({ viewableItems }) => {
+      const isBottom = viewableItems.some(item => item.index === 0);
+      setUiState(prev => ({ ...prev, isBottomReached: isBottom }));
+    }, []);
+
+     // Memoized FlatList props for optimal performance
+     const flatListProps = useMemo(() => ({
+      bounces: true,
+      ref: flatListRef,
+      onEndReached: loadMoreChats,
+      onEndReachedThreshold: 0.5,
+      keyExtractor: (post) => post.id,
+      ListFooterComponent: headerComponent,
+      onScroll: Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: true }
+      ),
+      viewabilityConfig: viewabilityConfig,
+      onViewableItemsChanged: onViewableItemsChanged,
+      scrollEventThrottle: 16,
+      inverted: true,
+      renderItem: renderItem,
+      data: chats,
+      // Performance optimizations
+      removeClippedSubviews: true,
+      maxToRenderPerBatch: 17,
+      windowSize: 17,
+      initialNumToRender: 17,
+      getItemLayout: null, // Better for dynamic heights
+    }), [
+      loadMoreChats,
+      headerComponent,
+      scrollY,
+      viewabilityConfig,
+      onViewableItemsChanged,
+      renderItem,
+      chats
+    ]);
 
 
-    const [oppuserprofile,setnewoppuserprofile] = useState(null);
-    
-
-
-    // messagw doc listener
+    // Optimized cleanup effect
     useEffect(() => {
-      let unsubscribe;
-      // Call the async function and set the unsubscribe function
-      (async () => {
-          unsubscribe = await listenTypingStatus((newMessage) => {
-            const typing = newMessage.typing;
-            setoppusertyping(typing);
-            setHasstories(newMessage.hasstories);
-
-            setChatAccepted(newMessage.isrequestaccepted)
-   
-          });
-      })();
-
       return () => {
-          if (unsubscribe) unsubscribe();
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
       };
-    },[]);
+    }, []);
 
+    // Crucial: Set read status for incoming messages
     useEffect(() => {
-
       const setReadMessage = async () => {
-        if (!isInteracted || isInteracted === null)return;
 
-        if (incomingMessage !== null) {
+        console.log('Setting read status for incoming e');
+
+        if (!chatState.isInteracted || chatState.isInteracted === null)return;
+
+        if (dataState.incomingMessage !== null) {
           const userinfo = await getData('@profile_info');
 
-          if (userinfo.uid !== incomingMessage.receiverid) {
-            return;
-          }
-
+          if (userinfo.uid !== dataState.incomingMessage.receiverid) {
+            console.log("incoming message not for this user");
+          return;
         }
 
+        }
+       
+
+        console.log('Setting read status for incoming message');
+
         const batch = writeBatch(db);
-        const userinfo = await getData('@profile_info')
+        const userinfo = await getData('@profile_info');
 
         const oppMessageRef = doc(db, `users/${oppUser.uid}/messages/${userinfo.uid}`);
-        batch.update(oppMessageRef, {isoppread:true});
+        batch.update(oppMessageRef, { isoppread: true, stamp:serverTimestamp() });
 
         const messageRef = doc(db, `users/${userinfo.uid}/messages/${oppUser.uid}`);
-        batch.update(messageRef, {isread:true});
+        batch.update(messageRef, { isread: true, stamp:serverTimestamp() });
 
         try {
           await batch.commit();
@@ -431,183 +838,10 @@ const chatglobal = () => {
         } catch (error) {
           console.error("Error committing batch operations:", error);
         }
-
-      }
+      };
 
       setReadMessage();
-
-    },[isInteracted,incomingMessage]);
-
-    const [iscurrentUserBlocked,setBlockedCurrentUser] = useState(false)
-
-    const listenOppuserOnlineStatus = async (callback) => {
-
-      
-      const userRef = collection(db, `users`);
-      const q = query(userRef, where('uid','==', oppUser.uid.trim()));
-
-      console.log("userid "+oppUser.uid)
-
-
-      // Real-time listener to detect new documents
-      return onSnapshot(q, (snapshot) => {
-          snapshot.docChanges().forEach((change) => {
-              console.log("something changedd")
-              callback(change.doc.data());
-          });
-      });
-
-    }
-
-
-    const [oppuserlastseen,setoppuserlastseen] = useState(null)
-
-
-    // messagw doc listener
-    useEffect(() => {
-      let unsubscribe;
-      // Call the async function and set the unsubscribe function
-      (async () => {
-          unsubscribe = await listenOppuserOnlineStatus(async (data) => {
-
-            console.log("running")
-
-            const online = data.isonline;
-            setoppuseronline(online);
-
-            setoppuserlastseen(data.lastactive);
-
-            setnewoppuserprofile({profilephoto:data.profilephoto});
-
-            const blockedusers = data.blockedusers;
-
-            if (blockedusers) {
-              const currentUserInfo = await getData('@profile_info')
-              const isCurrentUserBlocked = blockedusers.some(user => user === currentUserInfo.uid);
-
-              console.log("is user blocked ? "+isCurrentUserBlocked)
-
-              setBlockedCurrentUser(isCurrentUserBlocked);
-            }
-          });
-      })();
-
-      return () => {
-          if (unsubscribe) unsubscribe();
-      };
-    },[]);
-
-    const handleProfilePress = () => {
-      router.push({
-        pathname: '/oppuserprofile',
-        params: {uid:oppUser.uid}
-
-      });
-    }
-
-
-    useLayoutEffect(() => {
-        navigation.setOptions({
-          headerLeft: () => (
-
-            <View style={{flexDirection:'row',alignItems:'center'}}>
-
-                <TouchableOpacity  onPress={handleHeaderLeftPress}>
-                    
-                    <Image
-                    resizeMode="contain"
-                    source={require('@/assets/icons/arrow.png')}
-                    style={{ height: 20, tintColor: colorScheme === 'dark' ? Colors.light_main: Colors.dark_main, alignSelf: 'flex-end' }}
-                    />
-
-                </TouchableOpacity>
-
-
-               <TouchableOpacity onPress={handleProfilePress}>
-
-                 <View style={{flexDirection:'row',alignItems:'center'}}>
-
-                 <LinearGradient
-                    colors={['#FF7F50', '#FF6347', '#FF4500']} // Define your gradient colors here
-                    style={!hasStories ?{width:30,height:30,borderRadius:15}:styles.gradient}
-                    start={{ x: 0, y: 0 }} // Gradient start point (top-left)
-                    end={{ x: 1, y: 1 }} // Gradient end point (bottom-right)
-                >
-                    <Image
-                    resizeMode="cover"
-                    source={oppuserprofile !== null ?{uri: oppuserprofile.profilephoto} :require('@/assets/icons/user.png')}
-                    style={[styles.profileImage, !hasStories && {borderWidth:0} , {borderColor:colorScheme === 'dark' ? Colors.dark_main: Colors.light_main}] }
-                    />
-
-                </LinearGradient>
-
-                <View style={{marginStart:10}}>
-
-                  <View style={{flexDirection:"row",alignItems:"center"}}> 
-                              
-                              
-                      <Text style={{fontSize:16,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}>{oppUser.username}</Text>
-          
-                      {(oppUser.verified )&& <Image
-                                          resizeMode="contain"
-                                          source={require('@/assets/icons/verified.png')}
-                                          style={{height:15, width:15,marginStart:3}}
-                                        />}
-                              
-                    </View>
-
-                  
-
-                  {oppuserlastseen !== null && <Text style={{fontSize:16,color:'gray'}}>{(oppusertyping!== null && oppusertyping) ? 'typing':(oppuseronline !== null && oppuseronline) ? 'online' : timeAgo(oppuserlastseen)}</Text>}
-
-                </View>
-
-
-                
-
-
-                 </View>
-
-               </TouchableOpacity>
-
-            </View>
-           
-           
-          ),
-        });
-      }, [navigation,oppuserlastseen,oppuseronline,oppusertyping,oppuserprofile,hasStories]);
-
-      
-
-
-      const snapPoinst = useMemo(() => ['45%'],[])
-
-      const checkLocationPermission = async () =>{
-
-        const location = await getLocation();
-
-        if (location === null) {
-          showToast("Location is required")
-          return;
-        }
-
-        setUserLocation({ 
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,})
-      
-
-        bottomSheetRef.current?.snapToIndex(0);
-
-      }
-
-      const handleRegionChangeComplete = (region) => {
-        setUserLocation(region);
-      };
-
-
-
+    }, [dataState.incomingMessage,chatState.isInteracted,oppUser.uid]);
 
       const handleSendMessage = async (messageType = 'text', content = null) =>{
 
@@ -622,33 +856,33 @@ const chatglobal = () => {
           senderid: userInfo.uid,
           receiverid:oppUser.uid,
           messageType,
-           ...(messageType === 'text' ? { message: text } :
+           ...(messageType === 'text' ? { message: uiState.text } :
             messageType === 'image' ?{ images: content } : {location:content}), // Simulated sender ID
         };
 
-        if(isReplying){
+        if(uiState.isReplying){
           newMessage.mainmessage = {
-            sendername:selectedItem.senderid === userInfo.uid ? userInfo.username:oppUser.username,
-            ...(selectedItem.messageType === 'text' ? { message: selectedItem.message } :
-              selectedItem.messageType === 'image' ?{ images: selectedItem.images } : {location:selectedItem.location}),
-            messageType:selectedItem.messageType,
-            id:selectedItem.id,
-            ...(selectedItem.messageType === 'text' ? { message: selectedItem.message } :
-            selectedItem.messageType === 'image' ? { image: selectedItem.images[0] } : {location:selectedItem.location})
+            sendername:dataState.selectedItem.senderid === userInfo.uid ? userInfo.username:oppUser.username,
+            ...(dataState.selectedItem.messageType === 'text' ? { message: dataState.selectedItem.message } :
+              dataState.selectedItem.messageType === 'image' ?{ images: dataState.selectedItem.images } : {location:dataState.selectedItem.location}),
+            messageType:dataState.selectedItem.messageType,
+            id:dataState.selectedItem.id,
+            ...(dataState.selectedItem.messageType === 'text' ? { message: dataState.selectedItem.message } :
+            dataState.selectedItem.messageType === 'image' ? { image: dataState.selectedItem.images[0] } : {location:dataState.selectedItem.location})
           }
         }
 
-        setChats((prevChats) => [newMessage, ...prevChats]);
+        setChats(prev => [newMessage, ...prev]);
 
-        setTyping(false);
+        setUiState(prev => ({ ...prev, isTyping: false }));
 
-        setText('')
+        setUiState(prev => ({ ...prev, text: '' }));
 
         setTimeout(() => {
           flatListRef.current?.scrollToOffset({ animated: true, offset: 0 });
         }, 100);
 
-        setReplying(false);
+        setUiState(prev => ({ ...prev, isReplying: false }));
 
         simulateSendMessage(newMessage,userInfo.uid)
 
@@ -656,26 +890,18 @@ const chatglobal = () => {
 
       const simulateSendMessage = async (newMessage,userid) => {
 
-        if (isFirstSnapshot.current === true) {
-            console.log("still loading")
-
-            const timer = setTimeout(async() => {
-              simulateSendMessage(newMessage,userid)
-            }, 5000);
-
-          return;
-        }
-
         let urls = []
+
+        const userInfo = await getData('@profile_info');
 
         if (newMessage.messageType === 'image') {
 
+          console.log("newMessageimages",newMessage.images);
 
 
           for (const uri of newMessage.images) {
 
             const fileName = uri.split('/').pop(); // Get the file name from the URI
-  
             const response = await fetch(uri);
   
             const storageRef = ref(storage, `uploads/images/${userInfo.uid}/${fileName}`);
@@ -722,11 +948,9 @@ const chatglobal = () => {
 
         await setDoc(chatRef,{...newMessage, ...(newMessage.messageType === 'image'? {images:urls} : {})});
 
-        setChats((prevChats) =>
-          prevChats.map((msg) =>
+        setChats(prev => prev.map((msg) =>
             msg.id === newMessage.id ? { ...msg, status: 'sent' } : msg
-          )
-        );
+        ));
 
       
       };
@@ -750,31 +974,6 @@ const chatglobal = () => {
 
       const [selectionMode, setSelectionMode] = useState(false);
 
-      const [textdeleteStatus,settextdeleteStatus] = useState('')
-
-
-      const handleLongPress = async (item) => {
-
-          if (item.isdeleted) return;
-
-          const userinfo = await getData('@profile_info');
-
-          if (userinfo.uid === item.senderid) {
-            settextdeleteStatus("Delete for everyone")
-          }else {
-            settextdeleteStatus("Delete for you")
-          }
-
-
-
-          setReplying(false)
-          setSelectedItem(item)
-          setShowDialog(true)
-
-
-          console.log(JSON.stringify(item))
-      };
-
       const handlePress = (itemId) => {
         if (selectionMode) {
           toggleSelection(itemId);
@@ -784,80 +983,41 @@ const chatglobal = () => {
       };
 
       const toggleSelection = (itemId) => {
-        setChats((prevChats) =>
-          prevChats.map((chat) =>
+        setChats(prev => prev.map((chat) =>
             chat.id === itemId ? { ...chat, selected: !chat.selected } : chat
-          )
-        );
+        ));
       };
 
-
-
       const CustomDialog = ({ isVisible,onclose,children, ...rest}) => {
-
         const content = (
-
           <TouchableWithoutFeedback onPress={onclose}>
-
             <View style={{alignItems:'center',justifyContent:'center',flex:1,backgroundColor:'rgba(0, 0, 0, 0.5)'}}>
-
             {children}
-
             </View>
-
           </TouchableWithoutFeedback>
-          
         )
-   
       
         return (
           <Modal 
           visible={isVisible} 
           transparent
-      
           statusBarTranslucent
           animationType='fade' 
           {...rest}
            >
-
             {content}
-            
           </Modal>
         );
       };
-      
-
-      const handleCloseDialog = () => {
-        setShowDialog(false);
-      };
-      
-
-      const handleReply = () =>{
-        setReplying(!isReplying)
-        setShowDialog(false)
-      }
-
-      const scrollToChatItem = (chatId) => {
-        const index = chats.findIndex((chat) => chat.id === chatId);
-      
-        if (index !== -1) {
-          flatListRef.current?.scrollToIndex({ animated: true, index });
-
-        }
-      };
-
 
       const handleOnSendLocationPress = () =>{
-
         const location = {
-          latitude:userLocation.latitude,
-          longitude:userLocation.longitude,
-          address:address.formattedAddress
+          latitude:dataState.userLocation.latitude,
+          longitude:dataState.userLocation.longitude,
+          address:dataState.address.formattedAddress
         }
         handleSendMessage('location',location)
-
         bottomSheetRef.current?.close();
-
       }
 
       const deleteChatItem = useCallback(async () => {
@@ -866,14 +1026,14 @@ const chatglobal = () => {
 
         const batch = writeBatch(db); // Initialize the batch
 
-        const chatRef = doc(db, `users/${userInfo.uid}/messages/${oppUser.uid}/chats/${selectedItem.id}`);
-        const oppchatRef = doc(db, `users/${oppUser.uid}/messages/${userInfo.uid}/chats/${selectedItem.id}`);
+        const deleteChatRef = doc(db, `users/${userInfo.uid}/messages/${oppUser.uid}/chats/${dataState.selectedItem.id}`);
+        const deleteOppChatRef = doc(db, `users/${oppUser.uid}/messages/${userInfo.uid}/chats/${dataState.selectedItem.id}`);
 
         // Add the updates to the batch
-        batch.update(chatRef, { isdeleted: true });
+        batch.update(deleteChatRef, { isdeleted: true });
 
-        if (selectedItem.senderid === userInfo.uid) {
-          batch.update(oppchatRef, { isdeleted: true });
+        if (dataState.selectedItem.senderid === userInfo.uid) {
+          batch.update(deleteOppChatRef, { isdeleted: true });
         }
 
         
@@ -892,15 +1052,15 @@ const chatglobal = () => {
         //   )
         // )
         
-        setShowDialog(false)
-      },[selectedItem,oppUser]
+        setUiState(prev => ({ ...prev, showDialog: false }));
+      },[dataState.selectedItem,oppUser]
      )
       
 
       const handleAcceptRequest = async () =>{
 
-        setDialogType('loading')
-        setShowDialog(true);
+        setUiState(prev => ({ ...prev, dialogType: 'loading' }));
+        setUiState(prev => ({ ...prev, showDialog: true }));
 
         const userInfo = await getData('@profile_info')
 
@@ -910,106 +1070,42 @@ const chatglobal = () => {
         const oppmessageRef = doc(db, `users/${oppUser.uid}/messages/${userInfo.uid}`);
 
         // Add the updates to the batch
-        batch.update(messageRef, { isrequest: false });
-        batch.update(oppmessageRef, { isrequestaccepted: true });
+        batch.update(messageRef, { isrequest: false, stamp:serverTimestamp(), isrequestaccepted:true, timestamp:serverTimestamp() });
+        batch.update(oppmessageRef, { isrequestaccepted: true, stamp:serverTimestamp() ,isrequest:false });
 
         // Commit the batch
         try {
           await batch.commit();
           console.log('Batch update successful');
+
+          handleSendRequest();
         } catch (error) {
           console.error('Error executing batch update:', error);
         }
 
-        setShowDialog(false)
-        setDialogType('popup')
-        setisRequest(false)
+        setUiState(prev => ({ ...prev, showDialog: false }));
+        setUiState(prev => ({ ...prev, dialogType: 'popup' }));
+        setChatState(prev => ({ ...prev, isrequest: false }));
 
         
-      }
-
-    
-      const scrollToBottom = () => {
-        const index = 0
-        flatListRef.current?.scrollToIndex({ animated: true, index});
-      };
-
-      const scrollY = useRef(new Animated.Value(0)).current;
-
-      const viewabilityConfig = {
-        itemVisiblePercentThreshold: 100, // 100% of the item must be visible
-      };
-
-      const onViewableItemsChanged = ({ viewableItems }) => {
-        if (viewableItems.length > 0) {
-          const lastItemVisible = viewableItems[0].index === 0; // First item in data (visually bottom item)
-          setIsBottomReached(lastItemVisible);
-        }
-      };
-
-      const openGoogleMaps = (latitude, longitude) => {
-        const url = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-        Linking.openURL(url).catch(err => console.error("Error opening Google Maps", err));
-      };
-
-      const handleItemPress = (item) =>{
-
-        if(item.messageType === "image"){
-          const objectList = item.images.map(uri => ({ uri }));
-
-          setselectedImages(objectList)
-
-          setimageViewerVisible(true)
-
-        }else if (item.messageType === "location"){
-
-          openGoogleMaps(item.location.latitude,item.location.longitude)
-
-        }
-
-        
-      }
-
-      const [loadingmore,setLoadingMore] = useState(false);
-
-      const loadMoreChats = async () => {
-        console.log("loading more")
-
-        if (loadingmore || !lastVisibleChat) return;
-
-        setLoadingMore(true);
-        const profileInfo = await getData('@profile_info');
-        const chatRef = collection(db, `users/${profileInfo.uid}/messages/${oppUser.uid}/chats`);
-        const q = query(chatRef, orderBy('timestamp', 'desc'), startAfter(lastVisibleChat), limit(10));
-
-        const moreSnapshot = await getDocs(q);
-        const moreChats = moreSnapshot.docs.map(doc => ({
-            ...doc.data(),
-            status: 'sent',
-        }));
-        
-        // Update last visible document and prepend new chats to list
-        setLastVisible(moreSnapshot.docs[moreSnapshot.docs.length - 1]);
-        setChats((prevChats) => [...prevChats, ...moreChats]);
-        setLoadingMore(false);
       }
 
 
       const handleBlockUser = useCallback(async() => {
 
-          if (oppuserprofile === null) return;
+          if (oppUser.oppuserprofile === null) return;
       
           const batch = writeBatch(db);
 
-          setDialogType('loading')
-          setShowDialog(true);
+          setUiState(prev => ({ ...prev, dialogType: 'loading' }));
+          setUiState(prev => ({ ...prev, showDialog: true }));
       
         
       
           const oppuserinfo = {
             username:oppUser.username,
             uid:oppUser.uid,
-            profilephoto:oppuserprofile.profilephoto
+            profilephoto:oppUser.oppuserprofile.profilephoto
           }
       
           const currentuserprofile = await getData('@profile_info')
@@ -1029,21 +1125,13 @@ const chatglobal = () => {
 
           router.back();
       
-        },[oppuserprofile,oppUser]);
+        },[oppUser.oppuserprofile,oppUser]);
 
-
-      const headerComponent = useCallback(() => {
-        return loadingmore ? (
-          <View style={{marginTop:10}}>
-            <ActivityIndicator size="large" color="white" />
-          </View>
-        ) : null;
-      }, [loadingmore]);
 
       const handleDelete = useCallback( async() => {
 
-        setDialogType('loading')
-        setShowDialog(true);
+        setUiState(prev => ({ ...prev, dialogType: 'loading' }));
+        setUiState(prev => ({ ...prev, showDialog: true }));
 
         const userInfo = await getData('@profile_info')
 
@@ -1055,6 +1143,8 @@ const chatglobal = () => {
         // Add the updates to the batch
         batch.delete(messageRef);
         //batch.delete(oppmessageRef);
+
+        handleSendRequest();
 
         // Commit the batch
         try {
@@ -1068,15 +1158,27 @@ const chatglobal = () => {
 
       },[oppUser]);
 
+      // send redux action to requestsmessaging
+      const handleSendRequest = async() => {
+        dispatch(setData({intent:'actionchatglobal'}));
+      }
+
 
       const handleCopyText = useCallback(async() => {
-        await Clipboard.setStringAsync(selectedItem.message);
+        await Clipboard.setStringAsync(dataState.selectedItem.message);
 
-        setShowDialog(false)
-      },[selectedItem])
+        setUiState(prev => ({ ...prev, showDialog: false }));
+      },[dataState.selectedItem])
 
   
 
+      // Add swipe reply handler
+      // const handleSwipeReply = (message) => {
+      //   setUiState(prev => ({ ...prev, selectedItem: message, isReplying: true }));
+      //   if (Haptics && Haptics.impactAsync) {
+      //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      //   }
+      // };
      
     return (
 
@@ -1084,183 +1186,245 @@ const chatglobal = () => {
 
         <View style={{flex:1}}>
 
-        <Animated.FlatList
-        bounces={true}
-        ref={flatListRef}
-        onEndReached={loadMoreChats} // Trigger on scroll up for more messages
-        onEndReachedThreshold={0.1}
-        keyExtractor={(post) => post.id}
-        ListFooterComponent={headerComponent}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        viewabilityConfig={viewabilityConfig}
-        onViewableItemsChanged={onViewableItemsChanged}
-        scrollEventThrottle={16} 
-        inverted
-        renderItem={({item,index}) =>(
+        <Animated.FlatList {...flatListProps} />
 
+       
 
-          <ScalablePressable
-            item={item} // Pass selected state
-            onReplySelect={scrollToChatItem}
-            currentuserid={userInfo.uid}
-            
-            onPress={() => handleItemPress(item)}
-            prevItem={(index + 1) < chats.length ? chats[index + 1] : null}
-            onLongPress={() => handleLongPress(item)}
-          />
-
-          
-        )}
-        data={chats}/>
-
-          {  isReplying &&
-            <View style={{alignItems:'center'}}>
-
-              <View style={{width:'100%',height:1,backgroundColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,marginBottom:10}}/>
-
-
-
-              <View style={{flexDirection:'row',width:'90%',justifyContent:'space-between'}}>
-
-              <View>
-
-                <Text style={{fontSize:13,color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main,marginBottom:5}}>{selectedItem.senderid === userInfo.uid ? userInfo.username:oppUser.username}</Text>
-
-                { 
-                  selectedItem.messageType === 'text' ?
-
-                  (<Text numberOfLines={1} style={{fontSize:13,color:'gray',marginBottom:5}}>{selectedItem.message}</Text>)
-
-                  :selectedItem.messageType === 'image'? (<Image
-                    style={{width:25,height:25,borderRadius:3,marginBottom:5}}
-                    source={{uri:selectedItem.images[0]}}
-
-                  />):(
-                    <View style={{flexDirection:'row'}}>
-
-                      <Image
-                        style={{width:25,height:25,borderRadius:3,marginBottom:5,tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}
-                        source={require('@/assets/icons/pin.png')}/>
-
-
-                      <Text numberOfLines={1} style={{fontSize:13,color:'gray',marginBottom:5,marginStart:5}}>{selectedItem.location.address}</Text>
-
-
-                    </View>
-                  )
-                }
-
-              </View>
-
-
-              <TouchableOpacity onPress={handleReply}>
-                <Image
-                      style={{width:15,height:15,borderRadius:3,tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}
-                      source={require('@/assets/icons/cancel.png')}
-                    />
-              </TouchableOpacity>
-
-              </View>
-
-            </View>
+          {  uiState.isReplying &&
+            <ReplyContainer isReplying={uiState.isReplying} selectedItem={dataState.selectedItem} userInfo={dataState.userInfo} oppUser={oppUser} colorScheme={colorScheme} onCloseReply={handleReply} />
           }
 
 
-          {!isBottomReached && (
-              <FloatingButton isVisible={!isBottomReached} onPress={scrollToBottom} />
+          {!uiState.isBottomReached && (
+              <FloatingButton isVisible={!uiState.isBottomReached} onPress={scrollToBottom} />
           )}
 
 
          {
-          (isChatAccepted !== null && isChatAccepted && !isrequest  && !iscurrentUserBlocked) ? 
-            <View style={[styles.container, {backgroundColor:colorScheme === 'dark' ? Colors.dark_gray: Colors.light_main }]}>
+          (chatState.isChatAccepted !== null && chatState.isChatAccepted && !chatState.isrequest  && !chatState.iscurrentUserBlocked) ? 
+            <View style={[styles.modernInputContainer, {
+              backgroundColor: colorScheme === 'dark' ? 'rgba(20, 20, 20, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+              borderTopColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            }]}>
 
-              
+              {/* Typing Indicator */}
+              <TypingIndicator visible={chatState.oppusertyping} oppUsername={oppUser.username} colorScheme={colorScheme} animations={typingAnimations} />
 
+              <View style={styles.inputRow}>
+                {/* Enhanced Input Container */}
+                <View style={[styles.enhancedInputContainer, {
+                  backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                  borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+                }]}>
               <TextInput
               onChangeText={handleTyping} 
+                    placeholderTextColor={colorScheme === 'dark' ? '#888' : '#666'} 
+              value={uiState.text}
+                    placeholder='Type a message...' 
+                    multiline
+                    maxLength={1000}
+                    style={[styles.modernTextInput, {
+                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main
+                    }]}
+                  />
+
+                  {/* Attachment Icons */}
+                  {!uiState.isTyping && (
+                    <View style={styles.modernIconsContainer}>
+                      <TouchableOpacity 
+                        onPress={pickImageAsync}
+                        style={[styles.modernIconButton, {
+                          backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                        }]}
+                      >
+                        <Ionicons
+                          name="image"
+                          size={20}
+                          color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}
+                    />
+              </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        onPress={handleLocationPress}
+                        style={[styles.modernIconButton, {
+                          backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                        }]}
+                      >
+                        <Ionicons
+                          name="location"
+                          size={20}
+                          color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}
+                    />
+                  </TouchableOpacity>
+              </View>
+                  )}
+            </View>
+
+                {/* Enhanced Send Button */}
+                <Animated.View style={[
+                  styles.sendButtonContainer,
+                  {
+                    opacity: uiState.isTyping ? 1 : 0.6,
+                    transform: [{ scale: uiState.isTyping ? 1 : 0.8 }],
+                  }
+                ]}>
+                  <TouchableOpacity 
+                    onPress={() => handleSendMessage('text')}
+                    style={[styles.modernSendButton, {
+                      backgroundColor: uiState.isTyping ? Colors.blue : (colorScheme === 'dark' ? '#444' : '#DDD'),
+                    }]}
+                    disabled={!uiState.isTyping}
+                  >
+                    <Ionicons
+                      name="send"
+                      size={20}
+                      color="white"
+                    />
+                    </TouchableOpacity>
+                </Animated.View>
+              </View>
+            </View> :
+
+            (chatState.isChatAccepted !== null && (chatState.isrequest !== null && !chatState.isrequest) || chatState.iscurrentUserBlocked) ?
+            <View style={[styles.modernStatusContainer, {
+              backgroundColor: colorScheme === 'dark' ? 'rgba(20, 20, 20, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+              borderTopColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            }]}>
               
-              placeholderTextColor='gray' 
-              value={text}
-              placeholder='Write something..' 
-              style={[styles.textInput, {color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}]}/>
-
-              {!isTyping ? (
-                  <View style={styles.iconsView}>
-                    <TouchableOpacity onPress={pickImageAsync}>
-
-                      <Image
-                        style={[styles.inputIcons, {tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}]}
-                        source={require('@/assets/icons/gallery.png')}
-                      />
-
-                    </TouchableOpacity>
-                    
-
-                    <TouchableOpacity onPress={checkLocationPermission}>
-                      <Image
-                        style={[styles.inputIcons, {tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}]}
-                        source={require('@/assets/icons/location.png')}
-                      />
-
-                    </TouchableOpacity>
+              {chatState.iscurrentUserBlocked ? (
+                // Account Restricted View
+                <View style={[styles.statusCard, {
+                  backgroundColor: colorScheme === 'dark' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)',
+                  borderColor: 'rgba(239, 68, 68, 0.3)',
+                }]}>
+                  
+                  <View style={[styles.statusIconContainer, {
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                  }]}>
+                    <Ionicons name="ban" size={28} color="#EF4444" />
+                  </View>
+                  
+                  <View style={styles.statusContent}>
+                    <Text style={[styles.statusTitle, {
+                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main
+                    }]}>
+                      Account Restricted
+                    </Text>
+                    <Text style={[styles.statusSubtitle, {
+                      color: colorScheme === 'dark' ? '#888' : '#666'
+                    }]}>
+                      This user has restricted their account
+                    </Text>
+                  </View>
                     
                   </View>
                 ) : (
-                  <TouchableOpacity onPress={() => handleSendMessage('text')}>
-                    <Image
-                      style={[styles.sendIcon, {tintColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}]}
-                      source={require('@/assets/icons/send.png')}
-                    />
-                  </TouchableOpacity>
-                )}
+                // Request Sent View
+                <View style={[styles.statusCard, {
+                  backgroundColor: colorScheme === 'dark' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.05)',
+                  borderColor: 'rgba(34, 197, 94, 0.3)',
+                }]}>
+                  
+                  <View style={[styles.statusIconContainer, {
+                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                  }]}>
+                    <Ionicons name="checkmark-circle" size={28} color="#22C55E" />
+                  </View>
 
-            </View> :
-
-            (isChatAccepted !== null && (isrequest !== null && !isrequest) || iscurrentUserBlocked) ?
-
-            <View style={{height:60,width:'100%'}}>
-
-              <View style={{width:'100%',height:0.8,backgroundColor:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}/>
-
-              <Text style={{fontSize:20,color:'gray',alignSelf:'center',marginTop:10}}>{iscurrentUserBlocked ? "Account restricted" : 'Request sent!'}</Text>
-
+                 
+                  
+                  <View style={styles.statusContent}>
+                    <Text style={[styles.statusTitle, {
+                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main
+                    }]}>
+                      Request Sent!
+                    </Text>
+                    <Text style={[styles.statusSubtitle, {
+                      color: colorScheme === 'dark' ? '#888' : '#666'
+                    }]}>
+                      Waiting for {oppUser.username} to accept your message request
+                    </Text>
+                  </View>
+                  
+                  {/* Animated Pulse Effect */}
+                  <View style={styles.pulseContainer}>
+                    <Animated.View style={[styles.pulseRing, {
+                      backgroundColor: 'rgba(34, 197, 94, 0.3)',
+                    }]} />
+                  </View>
+                  
+                </View>
+              )}
               
             </View> :
 
-            (isrequest !== null && isrequest) ?  <View style={styles.requestContainer}>
+            (chatState.isrequest !== null && chatState.isrequest) ?  
+            <View style={[styles.modernRequestContainer, {
+              backgroundColor: colorScheme === 'dark' ? 'rgba(20, 20, 20, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+              borderTopColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            }]}>
+              
+              {/* Request Card */}
+              <View style={[styles.requestCard, {
+                backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+              }]}>
+                
+                {/* Header */}
+                <View style={styles.requestHeader}>
+                  <View style={[styles.requestIcon, {
+                    backgroundColor: colorScheme === 'dark' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)',
+                  }]}>
+                    <Ionicons name="chatbubble-ellipses" size={24} color={Colors.blue} />
+                  </View>
+                  
+                  <View style={styles.requestInfo}>
+                    <Text style={[styles.requestTitle, {
+                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main
+                    }]}>
+                      Message Request
+                    </Text>
+                    <Text style={[styles.requestSubtitle, {
+                      color: colorScheme === 'dark' ? '#888' : '#666'
+                    }]}>
+                      {oppUser.username} wants to chat with you
+                    </Text>
+                  </View>
+                </View>
 
-            <Text style={{fontSize:20,color:'white',fontWeight:'bold'}}>{oppUser.username} wants to chat with you</Text>
+                {/* Description */}
+                <Text style={[styles.requestDescription, {
+                  color: colorScheme === 'dark' ? '#AAA' : '#777'
+                }]}>
+                  Do you want to receive messages from {oppUser.username}? They will only be able to send more messages if you accept.
+                </Text>
 
-            <Text style={{fontSize:15,color:'gray',textAlign:'center',marginTop:5}}>
-              Do you want to receive messages from {oppUser.username} ? This user will only get to send more messages if you accept</Text>
-            
-
-            <View style={styles.buttonsContainer}>
-
-              <TouchableOpacity onPress={handleBlockUser} style={styles.buttonContainer}>
-
-                <Text style={{fontSize:20,color:'red'}}>Block</Text>
-
+                {/* Action Buttons */}
+                <View style={styles.modernButtonsContainer}>
+                  <TouchableOpacity 
+                    onPress={handleBlockUser} 
+                    style={[styles.modernActionButton, styles.blockButton]}
+                  >
+                    <Ionicons name="ban" size={18} color="#EF4444" />
+                    <Text style={styles.blockButtonText}>Block</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={handleDelete} style={styles.buttonContainer}>
-
-                <Text style={{fontSize:20,color:'red'}}>Delete</Text>
-
+                  <TouchableOpacity 
+                    onPress={handleDelete} 
+                    style={[styles.modernActionButton, styles.deleteButton]}
+                  >
+                    <Ionicons name="trash" size={18} color="#EF4444" />
+                    <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={handleAcceptRequest} style={styles.buttonContainer}>
-
-                <Text style={{fontSize:20,color:'white'}}>Accept</Text>
-
+                  <TouchableOpacity 
+                    onPress={handleAcceptRequest} 
+                    style={[styles.modernActionButton, styles.acceptButton]}
+                  >
+                    <Ionicons name="checkmark" size={18} color="white" />
+                    <Text style={styles.acceptButtonText}>Accept</Text>
               </TouchableOpacity>
-
-
-
+                </View>
             </View>
           </View>: null
          }
@@ -1272,71 +1436,112 @@ const chatglobal = () => {
             enablePanDownToClose={true} 
             ref={bottomSheetRef}
             index={initialSnapIndex}
-            backgroundStyle={{backgroundColor:'#141414'}}
-            handleIndicatorStyle={{backgroundColor:'#fff'}}
+            backgroundStyle={{
+              backgroundColor: colorScheme === 'dark' ? '#1F1F1F' : '#FFFFFF',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+            }}
+            handleIndicatorStyle={{
+              backgroundColor: colorScheme === 'dark' ? '#666' : '#CCC',
+              width: 40,
+              height: 4,
+            }}
             snapPoints={snapPoinst}>
 
-              <View>
+              <View style={[styles.modernBottomSheetContainer, {
+                backgroundColor: colorScheme === 'dark' ? '#1F1F1F' : '#FFFFFF',
+              }]}>
 
-                {userLocation && <View  style={{ height: 200,width:'100%' ,overflow:'hidden',alignItems:'center'}}>
+                {/* Header */}
+                <View style={styles.bottomSheetHeader}>
+                  <View style={[styles.bottomSheetIconContainer, {
+                    backgroundColor: colorScheme === 'dark' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)',
+                  }]}>
+                    <Ionicons name="location" size={24} color="#22C55E" />
+                  </View>
+                  
+                  <View style={styles.bottomSheetHeaderText}>
+                    <Text style={[styles.bottomSheetTitle, {
+                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,
+                    }]}>
+                      Share Location
+                    </Text>
+                    <Text style={[styles.bottomSheetSubtitle, {
+                      color: colorScheme === 'dark' ? '#888' : '#666',
+                    }]}>
+                      Drag the map to select precise location
+                    </Text>
+                  </View>
+                </View>
 
-
-
-                  <View style={{width:'100%',height:'100%',marginHorizontal:15,overflow:'hidden',flex:1,borderRadius:10}}>
-
+                {/* Enhanced Map Container */}
+                {(
+                  <View style={styles.modernMapContainer}>
+                    <View style={[styles.mapWrapper, {
+                      backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                      borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                    }]}>
                     <MapView
-                    style={{ width:'90%',height:200,alignSelf:'center',marginHorizontal:10}}
-                    initialRegion={userLocation}
+                        style={styles.modernMapView}
+                    initialRegion={dataState.userLocation || {
+                      latitude: -1.2921,  // Nairobi coordinates as default
+                      longitude: 36.8219,
+                      latitudeDelta: 0.0922,
+                      longitudeDelta: 0.0421,
+                    }}
                     provider="google"
                     googleMapsApiKey="AIzaSyAPiEb105W4642ElH_5ZXX2Lrjx_H-UIqQ"
                     onRegionChangeComplete={handleRegionChangeComplete}
-                  
-                      >
-
-
-                  
+                        showsUserLocation={true}
+                        showsMyLocationButton={false}
+                        mapType="standard"
+                      />
                       
-                      </MapView>
+                      {/* Enhanced Center Marker */}
+                      <View style={styles.modernMarkerFixed}>
+                        <View style={styles.markerShadow}>
+                          <Ionicons name="location" size={32} color="#22C55E" />
+                        </View>
+                        <View style={styles.markerPulse} />
+                      </View>
+                    </View>
+                  </View>
+                )}
 
-
+                {/* Enhanced Address Section */}
+                <View style={[styles.modernAddressSection, {
+                  backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                  borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                }]}>
+                  <View style={styles.addressHeader}>
+                    <Ionicons name="location-outline" size={20} color={Colors.blue} />
+                    <Text style={[styles.addressLabel, {
+                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,
+                    }]}>
+                      Selected Location
+                    </Text>
                   </View>
               
-
-                <View style={styles.markerFixed}>
-
-                    <Image
-                        style={{height:40,width:40}}
-                        source={require('@/assets/icons/markerpin.png')}
-                      />
-                          
+                  {dataState.address && (
+                    <Text style={[styles.addressText, {
+                      color: colorScheme === 'dark' ? '#AAA' : '#666',
+                    }]}>
+                      {dataState.address.formattedAddress}
+                    </Text>
+                  )}
                   </View>
 
-
-                </View> }
-
-                <View style={{flexDirection:'row',alignItems:'center',marginStart:15,marginTop:15}}>
-
-                    <Image
-                          style={{height:50,width:50,tintColor:Colors.blue}}
-                          source={require('@/assets/icons/pin.png')}
-                      />
-
-                      <TouchableOpacity onPress={handleOnSendLocationPress} style={{marginStart:10}}>
-
-                        <Text style={{fontSize:15,color:'white'}}>Send selected location</Text>
-
-                        { address &&  <Text numberOfLines={1} style={{fontSize:15,color:'gray',marginTop:5}}>{address.formattedAddress}</Text>}
-
+                {/* Enhanced Send Button */}
+                <TouchableOpacity 
+                  onPress={handleOnSendLocationPress} 
+                  style={[styles.modernSendLocationButton, {
+                    backgroundColor: Colors.blue,
+                  }]}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="send" size={20} color="white" />
+                  <Text style={styles.sendLocationText}>Send Location</Text>
                       </TouchableOpacity>
-
-
-
-
-                </View>
-
-                
-
-
 
               </View>
 
@@ -1344,66 +1549,89 @@ const chatglobal = () => {
 
 
 
-        <CustomDialog onclose={handleCloseDialog}  isVisible={showDialog}>
-
-
+        <CustomDialog onclose={handleCloseDialog} isVisible={uiState.showDialog}>
           {
-            dialogType === 'popup'?
-            <View style={styles.dialog}>
-
-            <TouchableOpacity onPress={handleReply}>
-
-              <View  style={styles.modalSelection}>
-
-                <Text style={{color:'white',margin:5,fontSize:20}}>Reply</Text>
-
-                <Image style={{width:30,height:30,tintColor:'white'}} source={require('@/assets/icons/reply.png')}/>
-
+            uiState.dialogType === 'popup' ?
+            <View style={[styles.modernDialog, {
+              backgroundColor: colorScheme === 'dark' ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+              borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            }]}>
+              
+              {/* Header */}
+              <View style={styles.dialogHeader}>
+                <Text style={[styles.dialogTitle, {
+                  color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,
+                }]}>
+                  Message Options
+                </Text>
               </View>
 
+              {/* Actions */}
+              <View style={styles.dialogActions}>
+                
+                {/* Copy Action (only for text) */}
+                {(dataState.selectedItem && dataState.selectedItem.messageType === 'text') && (
+                  <TouchableOpacity 
+                    onPress={handleCopyText}
+                    style={[styles.modernDialogAction, {
+                      backgroundColor: colorScheme === 'dark' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.05)',
+                    }]}
+                  >
+                    <View style={[styles.dialogActionIcon, {
+                      backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                    }]}>
+                      <Ionicons name="copy" size={20} color="#22C55E" />
+              </View>
+                    <Text style={[styles.dialogActionText, {
+                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,
+                    }]}>
+                      Copy Text
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={colorScheme === 'dark' ? '#666' : '#AAA'} />
             </TouchableOpacity>
+                )}
 
-            {(selectedItem && selectedItem.messageType === 'text') && <TouchableOpacity onPress={handleCopyText}>
-
-            <View  style={styles.modalSelection}>
-
-              <Text style={{color:'white',margin:5,fontSize:20}}>Copy</Text>
-
-              <Image style={{width:30,height:30,tintColor:'white'}} source={require('@/assets/icons/copy.png')}/>
+                {/* Delete Action */}
+                <TouchableOpacity 
+                  onPress={deleteChatItem}
+                  style={[styles.modernDialogAction, {
+                    backgroundColor: colorScheme === 'dark' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)',
+                  }]}
+                >
+                  <View style={[styles.dialogActionIcon, {
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                  }]}>
+                    <Ionicons name="trash" size={20} color="#EF4444" />
+            </View>
+                  <Text style={[styles.dialogActionText, {
+                    color: '#EF4444',
+                  }]}>
+                    {uiState.textdeleteStatus}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={colorScheme === 'dark' ? '#666' : '#AAA'} />
+                </TouchableOpacity>
 
             </View>
+            </View> :
 
-            </TouchableOpacity>}
-
-
-            <TouchableOpacity onPress={deleteChatItem}>
-
-            <View  style={styles.modalSelection}>
-
-              <Text style={{color:'red',margin:5,fontSize:20}}>{textdeleteStatus}</Text>
-
-              <Image style={{width:30,height:30,tintColor:'red'}} source={require('@/assets/icons/delete.png')}/>
-
+            <View style={[styles.modernLoadingDialog, {
+              backgroundColor: colorScheme === 'dark' ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            }]}>
+              <ActivityIndicator size="large" color={Colors.blue} />
+              <Text style={[styles.loadingDialogText, {
+                color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,
+              }]}>
+                Processing...
+              </Text>
             </View>
-
-            </TouchableOpacity>
- 
-            
-            </View>:
-
-            <ActivityIndicator  size="large" color="white" />
-
-
           }
-
-          
         </CustomDialog>
 
         <ImageView
-          images={selectedImages}
+          images={dataState.selectedImages}
           imageIndex={0}
-          visible={imageViewerVisible}
-          onRequestClose={() => setimageViewerVisible(false)}
+          visible={uiState.imageViewerVisible}
+          onRequestClose={() => setUiState(prev => ({ ...prev, imageViewerVisible: false }))}
         />
 
 
@@ -1413,7 +1641,7 @@ const chatglobal = () => {
       </GestureHandlerRootView>
        
     )
-}
+})
 
 export default chatglobal
 
@@ -1537,5 +1765,552 @@ export default chatglobal
       },
       item:{
         margin:10
-      }
+      },
+      modernInputContainer: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        minHeight: 70,
+      },
+      typingIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        marginBottom: 8,
+        borderRadius: 20,
+        alignSelf: 'flex-start',
+      },
+      typingDots: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 8,
+      },
+      typingDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginHorizontal: 1,
+        opacity: 0.7,
+      },
+      typingText: {
+        fontSize: 13,
+        fontStyle: 'italic',
+      },
+      inputRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        gap: 12,
+      },
+      enhancedInputContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 24,
+        borderWidth: 1,
+        minHeight: 48,
+        maxHeight: 120,
+      },
+      modernTextInput: {
+        flex: 1,
+        fontSize: 16,
+        lineHeight: 20,
+        maxHeight: 80,
+        paddingVertical: 0,
+      },
+      modernIconsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 8,
+        gap: 8,
+      },
+      modernIconButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      sendButtonContainer: {
+        marginBottom: 2,
+      },
+      modernSendButton: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+      },
+      modernFloatingButton: {
+        position: 'absolute',
+        bottom: 50,
+        right: 20,
+        borderRadius: 25,
+        width: 50,
+        height: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      floatingButtonContent: {
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      newMessageBadge: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        backgroundColor: 'red',
+        borderRadius: 12,
+        width: 24,
+        height: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      newMessageDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: 'white',
+      },
+      modernRequestContainer: {
+        padding: 16,
+        borderTopWidth: 1,
+        minHeight: 100,
+      },
+      requestCard: {
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 10,
+        padding: 16,
+      },
+      requestHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+      },
+      requestIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+      },
+      requestInfo: {
+        flex: 1,
+      },
+      requestTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 4,
+      },
+      requestSubtitle: {
+        fontSize: 16,
+      },
+      requestDescription: {
+        fontSize: 14,
+        marginBottom: 16,
+      },
+      modernButtonsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 8,
+      },
+      modernActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        flex: 1,
+        minHeight: 44,
+      },
+      blockButton: {
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+      },
+      blockButtonText: {
+        marginLeft: 6,
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#EF4444',
+      },
+      deleteButton: {
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+      },
+      deleteButtonText: {
+        marginLeft: 6,
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#EF4444',
+      },
+      acceptButton: {
+        backgroundColor: Colors.blue,
+        borderWidth: 1,
+        borderColor: Colors.blue,
+      },
+      acceptButtonText: {
+        marginLeft: 6,
+        fontSize: 15,
+        fontWeight: '600',
+        color: 'white',
+      },
+      modernReplyContainer: {
+        padding: 16,
+        borderLeftWidth: 2,
+        minHeight: 100,
+      },
+      replyHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+      },
+      replyLabel: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginLeft: 12,
+      },
+      closeReplyButton: {
+        marginLeft: 'auto',
+      },
+      replyContent: {
+        marginBottom: 16,
+      },
+      replyImageContainer: {
+        marginBottom: 8,
+      },
+      replyImage: {
+        width: 100,
+        height: 100,
+        borderRadius: 5,
+      },
+      replyText: {
+        fontSize: 14,
+      },
+      replyLocationContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      modernBottomSheetContainer: {
+        flex: 1,
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        paddingBottom: 20,
+      },
+      bottomSheetHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+      },
+      bottomSheetIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+      },
+      bottomSheetHeaderText: {
+        flex: 1,
+      },
+      bottomSheetTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        marginBottom: 4,
+      },
+      bottomSheetSubtitle: {
+        fontSize: 14,
+        lineHeight: 18,
+      },
+      modernMapContainer: {
+        height: 200,
+        marginBottom: 20,
+      },
+      mapWrapper: {
+        flex: 1,
+        borderWidth: 2,
+        borderRadius: 16,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+      },
+      modernMapView: {
+        flex: 1,
+        borderRadius: 14,
+      },
+      modernMarkerFixed: {
+        position: 'absolute',
+        alignSelf: 'center',
+        top: '50%',
+        marginTop: -16,
+        zIndex: 1000,
+      },
+      markerShadow: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.8,
+        shadowRadius: 2,
+        elevation: 5,
+      },
+      markerPulse: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: 'rgba(34, 197, 94, 0.3)',
+        position: 'absolute',
+        top: 6,
+        left: 6,
+      },
+      modernAddressSection: {
+        padding: 16,
+        borderWidth: 1,
+        borderRadius: 12,
+        marginBottom: 20,
+      },
+      addressHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+      },
+      addressLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 8,
+      },
+      addressText: {
+        fontSize: 14,
+        lineHeight: 20,
+      },
+      modernSendLocationButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+      },
+      sendLocationText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: 'white',
+        marginLeft: 8,
+      },
+      modernDialog: {
+        width: '85%',
+        maxWidth: 400,
+        backgroundColor: 'transparent',
+        borderRadius: 20,
+        borderWidth: 1,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
+      },
+      dialogHeader: {
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+      },
+      dialogTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        textAlign: 'center',
+      },
+      dialogActions: {
+        paddingVertical: 8,
+      },
+      modernDialogAction: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        marginHorizontal: 8,
+        marginVertical: 4,
+        borderRadius: 12,
+      },
+      dialogActionIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+      },
+      dialogActionText: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: '500',
+      },
+      modernLoadingDialog: {
+        width: 160,
+        height: 160,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
+      },
+      loadingDialogText: {
+        fontSize: 14,
+        fontWeight: '500',
+        marginTop: 16,
+        textAlign: 'center',
+      },
+      modernStatusContainer: {
+        padding: 16,
+        borderTopWidth: 1,
+        minHeight: 100,
+      },
+      statusCard: {
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 10,
+        padding: 16,
+      },
+      statusIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+      },
+      
+      statusTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 4,
+      },
+      statusSubtitle: {
+        fontSize: 16,
+      },
+      pulseContainer: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      pulseRing: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: 'rgba(34, 197, 94, 0.3)',
+      },
+      modernHeaderContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+      },
+      modernBackButton: {
+        padding: 10,
+        borderRadius: 20,
+      },
+      modernProfileSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+      },
+      profileRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      profileImageContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 10,
+      },
+      modernGradient: {
+        flex: 1,
+        borderRadius: 20,
+      },
+      modernProfileImage: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 20,
+      },
+      modernUserInfo: {
+        flex: 1,
+      },
+      usernameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      modernUsername: {
+        fontSize: 16,
+        fontWeight: 'bold',
+      },
+      verifiedBadge: {
+        backgroundColor: Colors.blue,
+        borderRadius: 10,
+        padding: 2,
+        marginLeft: 5,
+      },
+      statusContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      typingStatusContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      miniTypingDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginHorizontal: 2,
+        opacity: 0.7,
+      },
+      modernStatusText: {
+        fontSize: 14,
+      },
+      onlineStatusIndicator: {
+        position: 'absolute',
+        bottom: 2,
+        right: 2,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        borderWidth: 2,
+      },
 })

@@ -45,6 +45,7 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
   const [loading, setLoading] = useState(false);
   const [keyboardStatus, setKeyboardStatus] = useState(false);
   const [mapLoading, setMapLoading] = useState(true);
+  const [locationChangePending, setLocationChangePending] = useState(false);
 
   // Map location state
   const [userLocation, setUserLocation] = useState({
@@ -53,6 +54,7 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
   });
+  const [hasUserMovedMap, setHasUserMovedMap] = useState(false);
 
   const user = useSelector(state => state.user);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
@@ -95,6 +97,12 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
       try {
         setMapLoading(true);
         
+        // Don't reset location if user has manually moved the map
+        if (hasUserMovedMap) {
+          setMapLoading(false);
+          return;
+        }
+        
         // Check if we already have business coordinates
         if (business?.coordinates?._latitude || business?.coordinates?.latitude) {
           setUserLocation({
@@ -133,11 +141,12 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
     };
     
     getUserLocation();
-  }, [business]);
+  }, [business, hasUserMovedMap]);
 
   // Handle map region change
   const handleRegionChangeComplete = (region) => {
     setUserLocation(region);
+    setHasUserMovedMap(true);
   };
 
   // Set up keyboard listeners
@@ -162,8 +171,21 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
       setAddress(business.address || '');
       setPhone(business.phonenumber || '');
       setEmail(business.email || '');
+      // Reset local pending state when business data changes
+      setLocationChangePending(false);
+      // Reset map movement tracking
+      setHasUserMovedMap(false);
     }
   }, [business]);
+
+  // Reset local pending state when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      setLocationChangePending(false);
+      // Reset map movement tracking when modal opens
+      setHasUserMovedMap(false);
+    }
+  }, [visible]);
 
   // Form validation
   const isFormValid = useCallback(() => {
@@ -219,6 +241,13 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
       
       const userRef = doc(db, 'users', userId);
       
+      // Check if location has changed
+      const originalLat = business?.coordinates?._latitude || business?.coordinates?.latitude;
+      const originalLng = business?.coordinates?._longitude || business?.coordinates?.longitude;
+      const locationChanged = 
+        Math.abs(originalLat - userLocation.latitude) > 0.000001 || 
+        Math.abs(originalLng - userLocation.longitude) > 0.000001;
+      
       // Create business data object
       const businessData = {
         'businessname':cleanString(businessName),
@@ -236,6 +265,11 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
       // Update the business data in Firestore
       await updateDoc(userRef, businessData);
       
+      // Set local pending state if location changed
+      if (locationChanged) {
+        setLocationChangePending(true);
+      }
+      
       // Notify parent component of update
       if (onUpdate) {
         onUpdate({
@@ -246,11 +280,15 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
           coordinates: {
             _latitude: userLocation.latitude,
             _longitude: userLocation.longitude
-          }
+          },
+        
         });
       }
       
-      showToast('Business information updated successfully');
+      showToast(locationChanged ? 
+        'Business information updated. Location change pending approval.' : 
+        'Business information updated successfully'
+      );
       
       // Close the modal
       if (onClose) {
@@ -262,7 +300,7 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
     } finally {
       setLoading(false);
     }
-  }, [userId, businessName, address, phone, email, userLocation, isFormValid, onUpdate, onClose]);
+  }, [userId, businessName, address, phone, email, userLocation, isFormValid, onUpdate, onClose, business]);
 
   // Toast helper
   const showToast = (message) => {
@@ -401,89 +439,119 @@ const BusinessInfoEditSheet = React.forwardRef(({ userId, business, onUpdate, vi
 
         <View style={styles.formGroup}>
           <Text style={[styles.label, { color: isDark ? '#CCCCCC' : '#555555' }]}>Business Location *</Text>
-          <Text style={[styles.locationHelp, { color: isDark ? '#999999' : '#888888' }]}>
-            Drag the map to position the pin at your business location
-          </Text>
           
-          <View style={styles.mapContainer}>
-            {mapLoading ? (
-              <View style={styles.mapLoadingContainer}>
-                <ActivityIndicator size="large" color={isDark ? Colors.light_main : Colors.blue} />
-                <Text style={{ color: isDark ? '#CCCCCC' : '#666666', marginTop: 10 }}>
-                  Loading map...
+          {/* Show pending view if location change is pending (either from server or locally after save) */}
+          {business?.locationchange || locationChangePending ? (
+            // Show pending view when location change is pending approval
+            <View style={[styles.pendingContainer, { backgroundColor: isDark ? '#333333' : '#F5F5F5' }]}>
+              <View style={styles.pendingIconContainer}>
+                <Ionicons 
+                  name="time-outline" 
+                  size={32} 
+                  color={isDark ? Colors.light_main : Colors.blue} 
+                />
+              </View>
+              <Text style={[styles.pendingTitle, { color: isDark ? '#CCCCCC' : '#333333' }]}>
+                Location Change Pending
+              </Text>
+              <Text style={[styles.pendingText, { color: isDark ? '#999999' : '#666666' }]}>
+                Your business location change request is being reviewed. You'll be notified once it's approved or denied.
+              </Text>
+              <View style={[styles.pendingStatusBadge, { backgroundColor: isDark ? Colors.light_main + '20' : Colors.blue + '20' }]}>
+                <Text style={[styles.pendingStatusText, { color: isDark ? Colors.light_main : Colors.blue }]}>
+                  Under Review
                 </Text>
               </View>
-            ) : (
-              <>
-                <MapView
-                  style={styles.map}
-                  region={userLocation}
-                  provider="google"
-                  onRegionChangeComplete={handleRegionChangeComplete}
-                  showsUserLocation
-                  showsMyLocationButton={false}
-                  zoomEnabled={true}
-                  scrollEnabled={true}
-                  pitchEnabled={true}
-                  rotateEnabled={true}
-                  zoomTapEnabled={true}
-                  zoomControlEnabled={true}
-                  minZoomLevel={1}
-                  maxZoomLevel={20}
-                >
-                </MapView>
-                <View style={styles.markerFixed}>
-                  <Image
-                    style={styles.markerImage}
-                    source={require('@/assets/icons/markerpin.png')}
-                  />
-                </View>
-                
-                <TouchableOpacity
-                  style={styles.getCurrentLocationButton}
-                  onPress={async () => {
-                    try {
-                      setMapLoading(true);
-                      const { status } = await Location.requestForegroundPermissionsAsync();
-                      
-                      if (status !== 'granted') {
-                        showToast('Permission to access location was denied');
-                        setMapLoading(false);
-                        return;
-                      }
-                      
-                      const location = await Location.getCurrentPositionAsync({});
-                      const newRegion = {
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                        latitudeDelta: 0.0922,
-                        longitudeDelta: 0.0421,
-                      };
-                      setUserLocation(newRegion);
-                      setMapLoading(false);
-                    } catch (error) {
-                      console.error('Error getting location:', error);
-                      showToast('Could not get your location');
-                      setMapLoading(false);
-                    }
-                  }}
-                >
-                  <Ionicons name="locate" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.getCurrentLocationText}>Current Location</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-          
-          <View style={styles.locationInfo}>
-            <View style={styles.locationCoords}>
-              <Text style={[styles.coordsText, { color: isDark ? '#CCCCCC' : '#666666' }]}>
-                Lat: {userLocation.latitude.toFixed(6)}
-              </Text>
-              <Text style={[styles.coordsText, { color: isDark ? '#CCCCCC' : '#666666' }]}>
-                Long: {userLocation.longitude.toFixed(6)}
-              </Text>
             </View>
+          ) : (
+            // Show normal location editing interface
+            <>
+              <Text style={[styles.locationHelp, { color: isDark ? '#999999' : '#888888' }]}>
+                Drag the map to position the pin at your business location
+              </Text>
+              
+              <View style={styles.mapContainer}>
+                {mapLoading ? (
+                  <View style={styles.mapLoadingContainer}>
+                    <ActivityIndicator size="large" color={isDark ? Colors.light_main : Colors.blue} />
+                    <Text style={{ color: isDark ? '#CCCCCC' : '#666666', marginTop: 10 }}>
+                      Loading map...
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <MapView
+                      style={styles.map}
+                      region={userLocation}
+                      provider="google"
+                      onRegionChangeComplete={handleRegionChangeComplete}
+                      showsUserLocation
+                      showsMyLocationButton={false}
+                      zoomEnabled={true}
+                      scrollEnabled={true}
+                      pitchEnabled={true}
+                      rotateEnabled={true}
+                      zoomTapEnabled={true}
+                      zoomControlEnabled={true}
+                      minZoomLevel={1}
+                      maxZoomLevel={20}
+                    >
+                    </MapView>
+                    <View style={styles.markerFixed}>
+                      <Image
+                        style={styles.markerImage}
+                        source={require('@/assets/icons/markerpin.png')}
+                      />
+                    </View>
+                    
+                    <TouchableOpacity
+                      style={styles.getCurrentLocationButton}
+                      onPress={async () => {
+                        try {
+                          setMapLoading(true);
+                          const { status } = await Location.requestForegroundPermissionsAsync();
+                          
+                          if (status !== 'granted') {
+                            showToast('Permission to access location was denied');
+                            setMapLoading(false);
+                            return;
+                          }
+                          
+                          const location = await Location.getCurrentPositionAsync({});
+                          const newRegion = {
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude,
+                            latitudeDelta: 0.0922,
+                            longitudeDelta: 0.0421,
+                          };
+                          setUserLocation(newRegion);
+                          setHasUserMovedMap(true);
+                          setMapLoading(false);
+                        } catch (error) {
+                          console.error('Error getting location:', error);
+                          showToast('Could not get your location');
+                          setMapLoading(false);
+                        }
+                      }}
+                    >
+                      <Ionicons name="locate" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.getCurrentLocationText}>Current Location</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            </>
+          )}
+        </View>
+
+        <View style={styles.locationInfo}>
+          <View style={styles.locationCoords}>
+            <Text style={[styles.coordsText, { color: isDark ? '#CCCCCC' : '#666666' }]}>
+              Lat: {userLocation.latitude.toFixed(6)}
+            </Text>
+            <Text style={[styles.coordsText, { color: isDark ? '#CCCCCC' : '#666666' }]}>
+              Long: {userLocation.longitude.toFixed(6)}
+            </Text>
           </View>
         </View>
 
@@ -722,6 +790,40 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 12,
+  },
+  pendingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 220,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  pendingIconContainer: {
+    marginBottom: 10,
+  },
+  pendingTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
+  },
+  pendingText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#666',
+    paddingHorizontal: 20,
+  },
+  pendingStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
+  },
+  pendingStatusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

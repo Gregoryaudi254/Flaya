@@ -30,5 +30,6 @@ export const Colors = {
   dark_main:'black',
   orange:'#FF6347',
   green:'#008000',
-  red_orange:'#FF4D00'
+  red_orange:'#FF4D00',
+  purple:'#8E44AD'
 };

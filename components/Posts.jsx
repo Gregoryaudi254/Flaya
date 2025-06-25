@@ -28,7 +28,7 @@ import * as Sharing from "expo-sharing";
 import { setVolume } from '@/slices/volumeSlice';
 import { timeAgoPost } from '@/constants/timeAgoPost';
 import Ionicons from '@expo/vector-icons/Ionicons';
-
+  
 const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post, activePost, onCommentPress, handlePlayPress, onImagePress, onReportPress, userinfo, handleRemovePost, handleBlockUser, handleSharePostPress, handleLikersPress }) => {
   const videoRef = useRef(null);
   const colorScheme = useColorScheme();
@@ -58,8 +58,8 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
   // Memoized formatString function
   const getFormatedString = useMemo(() => (number) => {
     return (number || 0) < 1000 
-      ? `${number || 0}` 
-      : `${(number / 1000).toFixed(1)}k`
+    ? `${number || 0}` 
+    : `${(number / 1000).toFixed(1)}k`
   }, []);
 
   const [state, setState] = useState({
@@ -80,26 +80,26 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
 
   // Reset video state when post changes
   useEffect(() => {
-    if (post.id !== lastItemId.current) {
-      lastItemId.current = post.id;
+  if (post.id !== lastItemId.current) {
+    lastItemId.current = post.id;
       updateState({
         isBuffering: false,
         isMuted: true
       });
 
-      if (videoRef.current) {
-        const unloadVideo = async () => {
+    if (videoRef.current) {
+      const unloadVideo = async () => {
           try {
-            await videoRef.current.unloadAsync();
+        await videoRef.current.unloadAsync();
           } catch (error) {
             console.error("Error unloading video:", error);
-          }
+      }
         };
 
-        if (activePost !== post.id) {
-          unloadVideo();
-        }
+      if (activePost !== post.id) {
+        unloadVideo();
       }
+    }
     }
   }, [post.id, activePost]);
 
@@ -179,7 +179,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
       
       if (!likedPosts.includes(post.id)) {
         setLikesMap(prev => ({
-          ...prev,
+        ...prev,
           [post.id]: (post.likes || 0) + 1,
         }));
 
@@ -205,7 +205,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
       videoRef.current.pauseAsync();
     }
   }, [post]);
-  
+
 
   const handlePressLikers = useCallback((onpress) => {
     onpress(post)
@@ -215,7 +215,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
     if (videoRef.current) {
       if (activePost === post.id) {
         try {
-          // videoRef.current.playAsync();
+         // videoRef.current.playAsync();
         } catch (e) {
           console.log(e);
         }
@@ -282,7 +282,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
   
       setDistanceString(distanceString)
     }catch(e){console.log(e)}
-  });
+    });
 
   useEffect(() => {
     try{
@@ -342,7 +342,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
       params: { data: encodeURIComponent(JSON.stringify(updatedPost)) }
     });
   }
-
+  
   useEffect(() => {
     checkInteractions();
   },[])
@@ -368,7 +368,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
     handleSharePostPress(content, post.contentType, post.user, post.id)
   },[post]);
 
-
+  
   const onEventPress = useCallback((event) => {
     router.push({
       pathname: '/eventdetails',
@@ -399,7 +399,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
     const category = categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
     return category ? category.icon : 'storefront-outline'; // Default icon if not found
   };
-  
+
   
   return (
     <View style={styles.mainView}>
@@ -431,7 +431,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                   }}
                 />}
 
-                
+
 
                 <TouchableOpacity onPress={handlePressShare}>
                   <Image
@@ -441,7 +441,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                       />
                 </TouchableOpacity>
 
-                <Text style={{fontSize:15, color:'gray', marginStart:3}}>{getFormatedString(post.sharings || 0)}</Text>  
+                 <Text style={{fontSize:15, color:'gray', marginStart:3}}>{getFormatedString(post.sharings || 0)}</Text>  
               </View>
 
               {post.isshowinglocation && <Image style={{height:25,width:25}} source={require('@/assets/icons/pinview.png')}/>}
@@ -528,10 +528,10 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                     {post.business.category}
                   </Text>
                 </View>}
-
+              
             </View>
 
-           
+
 
           </View>
         </View>
@@ -549,7 +549,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
             <ImageBackground
               source={{ uri: post.content[0] }}
               style={{ width: '100%', height: mediaDimensions.height, borderRadius: 10, overflow: 'hidden' }}
-            
+
             />
           </TouchableWithoutFeedback>
          
@@ -561,7 +561,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
             data={post.content.map((image) => ({ img: image }))}
             autoPlay={false}
             closeIconColor="#fff"
-          
+
             />
         </View>
          
@@ -573,19 +573,19 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
               style={{
                 width: "100%", height: mediaDimensions.height
               }}
-              >
+            >
               <View>
                 <Video 
-                  source={{ uri: post.content }}
-                  shouldPlay={false}
-                  ref={videoRef}
+                source={{ uri: post.content }}
+                shouldPlay={false}
+                ref={videoRef}
                   style={{ width: "100%", height: mediaDimensions.height, borderRadius: 10 }}
-                  resizeMode={ResizeMode.COVER}
-                  useNativeControls={false}
-                  usePoster={true}
-                  posterStyle={{ borderRadius: 10, overflow: 'hidden', resizeMode: 'cover' }}
-                  posterSource={{ uri: post.thumbnail }}
-                  onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+                resizeMode={ResizeMode.COVER}
+                useNativeControls={false}
+                usePoster={true}
+                posterStyle={{ borderRadius: 10, overflow: 'hidden', resizeMode: 'cover' }}
+                posterSource={{ uri: post.thumbnail }}
+                onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
 
                 />
               </View>
@@ -667,21 +667,21 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
           <View style={{flexDirection:'row'}}>
 
             <View style={[styles.bottomIconsView, {marginStart:3}, state.isLiked && {backgroundColor:'rgba(222, 61, 80, 0.1)',borderWidth:0}]}>
-              <TouchableOpacity onPress={handleOnLiked}>
-                <Image
-                  resizeMode="contain"
+          <TouchableOpacity onPress={handleOnLiked}>
+            <Image
+              resizeMode="contain"
                   source={!state.isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
                   style={[styles.menuIcon, !state.isLiked && {tintColor:'gray', marginRight:3}, {width:25,height:25, marginRight:5}]}
-                />
-              </TouchableOpacity>
+            />
+          </TouchableOpacity>
               <Text style={styles.bottomIconsText}>{getFormatedString(state.likes)}</Text>
-            </View>
-            
+        </View>
+
 
             <View style={[styles.bottomIconsView, state.isShared && {backgroundColor:'rgba(234, 93, 22, 0.2)',borderWidth:0}]}>
             <Menu renderer={Popover}>
                   <MenuTrigger>
-                    <Image
+                <Image
                       resizeMode="contain"
                       source={require('@/assets/images/refresh.png')}
                       style={[
@@ -690,7 +690,7 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                         state.isShared && {tintColor: 'tomato'}
                       ]}
                     />
-                  </MenuTrigger>
+                </MenuTrigger>
                   <MenuOptions customStyles={{
                     optionsContainer: {
                       borderRadius: 12,
@@ -700,30 +700,30 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
                       borderColor: colorScheme === 'dark' ? '#444444' : '#DDDDDD',
                     }
                   }}>
-                    <MenuOption onSelect={onRepostSelect}>
+                  <MenuOption onSelect={onRepostSelect}>
                       <View style={styles.menuOptionItem}>
-                        <Image
-                          resizeMode="contain"
-                          source={require('@/assets/images/refresh.png')}
+                      <Image
+                        resizeMode="contain"
+                        source={require('@/assets/images/refresh.png')}
                           style={{height: 20, width: 20, marginRight: 8}}
-                        />
+                      />
                         <Text style={styles.menuOptionText}>Repost</Text>
-                      </View>
-                    </MenuOption>
-                    <MenuOption>
+                    </View>
+                  </MenuOption>
+                  <MenuOption>
                       <View style={styles.cancelOption}>
                         <Text style={{color: '#FF3B30'}}>Cancel</Text>
-                      </View>
-                    </MenuOption>
-                  </MenuOptions>
-                </Menu>
+                    </View>
+                  </MenuOption>
+                </MenuOptions>
+            </Menu>
                 <Text style={[
                   styles.bottomIconsText,
                   isShared && {color: 'tomato', fontWeight: '500'}
                 ]}>
                   {getFormatedString(state.shares)}
                 </Text>
-           </View>
+        </View>
             
 
 
