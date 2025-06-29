@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, forwardRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -18,12 +18,15 @@ import { db } from '@/constants/firebase';
 import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from 'react-native-toast-notifications';
 import DropDownPicker from 'react-native-dropdown-picker';
+import { useAuth } from '@/constants/AuthContext';
+import { useRouter } from 'expo-router';
 
 const EventCheckInSheet = forwardRef(({ eventId, onCheckInComplete, eventType }, ref) => {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const toast = useToast();
   const snapPoints = ['60%'];
+  const router = useRouter()
   
   // Form state
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -37,6 +40,24 @@ const EventCheckInSheet = forwardRef(({ eventId, onCheckInComplete, eventType },
     { label: 'Male', value: 'male' },
     { label: 'Female', value: 'female' },
   ]);
+
+  const {user} = useAuth();
+
+  const isUserAuthenticated = useCallback(async () => {
+    const userinfo = await getData('@profile_info');
+    console.log("Checking authenication")
+    if (user.isAnonymous) {
+      router.push('/signUp')
+      return false;
+    }
+
+    if (!userinfo) {
+      router.push('/usernameinput')
+      return false;
+    }
+    return true;
+  },[user])
+
   
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -68,7 +89,12 @@ const EventCheckInSheet = forwardRef(({ eventId, onCheckInComplete, eventType },
     });
   };
   
+
+  // submit invite
   const handleSubmit = async () => {
+    const authenticated = await isUserAuthenticated();
+    if (!authenticated) return;
+
     if (!phoneNumber) {
       showToast("Please enter your phone number");
       return;
@@ -103,6 +129,7 @@ const EventCheckInSheet = forwardRef(({ eventId, onCheckInComplete, eventType },
         ...userinfo,
         phoneNumber: phoneNumber,
         gender: gender,
+        attended: false,
         invited: eventType === "Public" ? true : false,
         timestamp: serverTimestamp(),
       });

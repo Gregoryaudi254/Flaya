@@ -180,7 +180,7 @@ const ProfileEditScreen = () => {
     await storeData('@profile_info',userinfo)
 
   };
-  
+
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -232,7 +232,7 @@ const ProfileEditScreen = () => {
     setCaption(data.caption);
     setName(data.name);
     setImageSource(data.profilephoto);
-    
+
     setLoaded(true)
 
   });
@@ -380,7 +380,7 @@ const ProfileEditScreen = () => {
      
     }
   },[value]);
-
+ 
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -433,8 +433,8 @@ const ProfileEditScreen = () => {
                   <View style={styles.cameraIconContainer}>
                     <Ionicons name="camera" size={18} color="#FFFFFF" />
                   </View>
-                </TouchableOpacity>
-                
+      </TouchableOpacity>
+
                 <Text style={[styles.usernameDisplay, { color: isDark ? '#BBBBBB' : '#666666' }]}>
                   @{username}
                 </Text>
@@ -447,7 +447,7 @@ const ProfileEditScreen = () => {
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Name</Text>
-                  <TextInput 
+          <TextInput 
                     style={[
                       styles.textInput,
                       { 
@@ -455,20 +455,20 @@ const ProfileEditScreen = () => {
                         backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5'
                       }
                     ]}
-                    placeholder='Enter your full name'
-                    placeholderTextColor='gray'
-                    value={name}
+              placeholder='Enter your full name'
+              placeholderTextColor='gray'
+              value={name}
                     onChangeText={(text) => {
                       setName(text);
                       setChanged(true);
                     }}
-                  />
-                </View>
+          />
+      </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Username</Text>
                   <View style={styles.usernameInputContainer}>
-                    <TextInput 
+          <TextInput 
                       style={[
                         styles.textInput,
                         { 
@@ -479,8 +479,8 @@ const ProfileEditScreen = () => {
                       ]}
                       placeholder='Choose a unique username'
                       placeholderTextColor='gray'
-                      value={username}
-                      onChangeText={setUsername}
+                  value={username}
+                  onChangeText={setUsername}
                     />
                     <View style={styles.usernameStatusContainer}>
                       {usernameloading && 
@@ -494,18 +494,18 @@ const ProfileEditScreen = () => {
                         />
                       )}
                     </View>
-                  </View>
+            </View>
                   {!isAvailable && !usernameloading && username.length > 0 && (
                     <Text style={styles.errorMessage}>Username already taken</Text>
                   )}
                   {hasSpacesOrSpecialChars(username) && username.length > 0 && (
                     <Text style={styles.errorMessage}>No spaces or special characters allowed</Text>
                   )}
-                </View>
+      </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Bio</Text>
-                  <TextInput 
+          <TextInput 
                     style={[
                       styles.textInput,
                       styles.bioInput,
@@ -516,7 +516,7 @@ const ProfileEditScreen = () => {
                     ]}
                     placeholder='Write something about yourself...'
                     placeholderTextColor='gray'
-                    value={caption}
+                  value={caption}
                     onChangeText={(text) => {
                       setCaption(text);
                       setChanged(true);
@@ -532,18 +532,18 @@ const ProfileEditScreen = () => {
                     {caption ? caption.length : 0}/80
                   </Text>
                 </View>
-              </View>
+      </View>
 
               {userdata?.isbusinessaccount === true && (
                 <View style={[styles.formCard, { backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF', marginTop: 16 }]}>
                   <View style={styles.sectionHeader}>
                     <Text style={[styles.sectionTitle, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
-                      Business Information
-                    </Text>
+              Business Information
+        </Text>
                     <View style={[styles.badge, { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.2)' : 'rgba(0, 122, 255, 0.1)', marginLeft: 10 }]}>
                       <Text style={styles.badgeText}>Business</Text>
                     </View>
-                  </View>
+        </View>
 
                   <TouchableOpacity 
                     style={styles.businessInfoItem}
@@ -556,9 +556,11 @@ const ProfileEditScreen = () => {
                       <Text style={[styles.infoValue, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
                         {userdata?.business?.category || "Not set"}
                       </Text>
-                    </View>
+        </View>
                     <Ionicons name="chevron-forward" size={20} color={isDark ? '#BBBBBB' : '#666666'} />
-                  </TouchableOpacity>
+        </TouchableOpacity>
+
+               
 
                   <TouchableOpacity 
                     style={styles.businessInfoItem}
@@ -571,9 +573,9 @@ const ProfileEditScreen = () => {
                       <Text style={[styles.infoValue, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
                         {userdata?.business?.name || "Not set"}
                       </Text>
-                    </View>
+          </View>
                     <Ionicons name="chevron-forward" size={20} color={isDark ? '#BBBBBB' : '#666666'} />
-                  </TouchableOpacity>
+          </TouchableOpacity>
 
                   <TouchableOpacity 
                     style={styles.businessInfoItem}
@@ -586,7 +588,7 @@ const ProfileEditScreen = () => {
                       <Text style={[styles.infoValue, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
                         {userdata?.business?.address ? truncateText(userdata?.business?.address) : "Not set"}
                       </Text>
-                    </View>
+          </View>
                     <Ionicons name="chevron-forward" size={20} color={isDark ? '#BBBBBB' : '#666666'} />
                   </TouchableOpacity>
 
@@ -601,9 +603,9 @@ const ProfileEditScreen = () => {
                       <Text style={[styles.infoValue, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
                         Email, phone number
                       </Text>
-                    </View>
+          </View>
                     <Ionicons name="chevron-forward" size={20} color={isDark ? '#BBBBBB' : '#666666'} />
-                  </TouchableOpacity>
+          </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.deleteBusinessButton}
@@ -613,7 +615,7 @@ const ProfileEditScreen = () => {
                     <Ionicons name="trash-outline" size={20} color="#FFFFFF" style={{ marginRight: 10 }} />
                     <Text style={styles.deleteButtonText}>Delete Business Account</Text>
                   </TouchableOpacity>
-                </View>
+        </View>
               )}
             </View>
           ) : (
@@ -651,8 +653,8 @@ const ProfileEditScreen = () => {
                 onPress={handleDialogClose}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
+            </TouchableOpacity>
+
               <TouchableOpacity 
                 style={styles.confirmDeleteButton}
                 onPress={onDeleteAccount}
@@ -660,12 +662,12 @@ const ProfileEditScreen = () => {
                 <Text style={styles.confirmDeleteButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
-          </View>
+        </View>
         ) : (
           <View style={[styles.dialogContent, { minHeight: 200, justifyContent: 'center' }]}>
             <ActivityIndicator size="large" color="white" />
             <Text style={[styles.dialogMessage, { marginTop: 20, marginBottom: 0 }]}>Deleting business account...</Text>
-          </View>
+    </View>
         )}
       </CustomDialog>
     </GestureHandlerRootView>
@@ -682,11 +684,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
     borderWidth: 2,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 15,
-  },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      marginBottom: 15,
+    },
   saveButton: {
     height: 50,
     borderRadius: 25,

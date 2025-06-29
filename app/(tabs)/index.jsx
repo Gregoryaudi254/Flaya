@@ -33,7 +33,7 @@ const reports = ['Nudity or sexual activity','Scam or Fraud','Violence or self i
 
 import ImageView from "react-native-image-viewing"
 
-import Dialog from '@/components/CustomDialog';
+
 
 import { setDoc,doc, getDocs, collection, updateDoc, writeBatch,getDoc, serverTimestamp } from 'firebase/firestore';
 import { db, database, functions } from '@/constants/firebase';
@@ -60,6 +60,7 @@ import * as Sharing from "expo-sharing";
 import DownLoadMediaItem from "@/components/DownloadMediaItem";
 import InteractingUsers from '@/components/Likers'
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useAuth } from "@/constants/AuthContext";
 
 
 const home = () => {
@@ -71,13 +72,15 @@ const home = () => {
   const router = useRouter();
 
   useOnlineStatus();
+
+  const {user} = useAuth()
    
 
   const [posts, setPosts] = useState([]);
   const [userinfo, setUserInfo] = useState({})
   const [activePost, setActivePost] = useState(null);
   const [shouldLoadMore, setShouldLoadMore] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(null);
   const [isRefreshing, setRefreshing] = useState(false);
   const [storiesVisible, setStoriesVisible] = useState(true);
   const [isFullWidthModalVisible, setIsFullWidthModalVisible] = useState(false);
@@ -137,9 +140,24 @@ const home = () => {
 
     }); 
 
+    const isUserAuthenticated = useCallback(async () => {
+      const userinfo = await getData('@profile_info');
+      console.log("Checking authenication")
+      if (user.isAnonymous) {
+        router.push('/signUp')
+        return false;
+      }
+  
+      if (!userinfo) {
+        router.push('/usernameinput')
+        return false;
+      }
+      return true;
+    },[user])
 
 
-    const fetchPostWithNewLocation = useCallback(async (isRefreshing, initial, postsLength) => {
+
+    const fetchPostWithNewLocation = useCallback(async (isRefreshing, initial, postsLength, newpostLength) => {
     
       setFetchingPostsWithNewLocationLoading(true);
   
@@ -157,9 +175,9 @@ const home = () => {
         return;
       }
   
-      const userinfo = await getData('@profile_info');
+      const stored_coordinates = await getData('@stored_coordinates');
   
-      const savedlocation = userinfo.coordinates;
+      const savedlocation = stored_coordinates;
   
       let previousLocation = null;
 
@@ -171,25 +189,25 @@ const home = () => {
       }
   
       setlocationaccepted(true);
-
       dispatch(setCoordinates(currentLocation))
   
+      // check if should load post from new location
       if (!shouldLoadWithNewDistance(currentLocation, previousLocation)) return;
   
       fetchInitialStories();
   
-      
-
-  
       console.log("location stored")
   
-    
       setFetchingPostsWithNewLocationLoading(false);
-  
       await storeUserLocation(currentLocation);
+
   
-      
-      const data = await getDataBackend("getPosts", {userid:userinfo.uid,postlength:posts.length});
+      const data = await getDataBackend("getPosts", {userid:user.uid,postlength:posts.length,isrefreshing:isRefreshing});
+
+      // set refreshing to false because the first post fetching returned nothing
+      if (newpostLength === 0) {
+        setRefreshing(false)
+      }
   
       if(data !== null){
         
@@ -266,14 +284,18 @@ const home = () => {
     const response = await callbackFunction(info);
 
     const data = response.data;
-    console.log('Hureeeee', data); // Log the result
+    console.log('Hureeeee'); // Log the result
 
     return data;
    }); 
 
+   const [storedLocation, setStoredLocation] = useState(null)
+
   const fetchPosts = useCallback(
     
     async (isRefreshing = false, initial = false, fromLocationPress = false) => {
+
+      console.log("Fetching new data")
     
 
     if (isRefreshing) {
@@ -284,9 +306,13 @@ const home = () => {
     }
 
     let isFirstLocationQuery = false;
-    const userinfo = await getData('@profile_info');
-    if (islocationaccepted === false || !userinfo.coordinates) {
-      console.log("location was rejected")
+    const stored_coordinates = await getData('@stored_coordinates');
+    setStoredLocation(stored_coordinates);
+
+    console.log("location "+islocationaccepted +" coordinates " +JSON.stringify(stored_coordinates))
+
+    if (islocationaccepted === false || !stored_coordinates) {
+      console.log("No Location")
       setlocationaccepted(false);
       const currentLocation = await getLocation();
 
@@ -300,7 +326,6 @@ const home = () => {
         }
 
         return;
-
       }
 
       isFirstLocationQuery = true;
@@ -308,15 +333,13 @@ const home = () => {
       dispatch(setCoordinates(currentLocation))
 
       console.log("location stored via extra")
-
       setlocationaccepted(true);
-
-      await storeUserLocation(currentLocation);
+      await storeUserLocation(currentLocation, user.uid);
     }
 
 
     const data = await getPoarts("getPosts", {
-      userid: userinfo.uid,
+      userid: user.uid,
       postlength: posts.length,
       isrefreshing : isRefreshing // Send current length to get only new posts
     });
@@ -341,6 +364,7 @@ const home = () => {
       setShouldLoadMore(data.posts.length > 10);
     }else {setShouldLoadMore(false)}
 
+    console.log("Something changed")
 
     if (isRefreshing) {
       setRefreshing(false)
@@ -350,7 +374,7 @@ const home = () => {
 
     if (!fromLocationPress && !isFirstLocationQuery) {
       // fetch with new location if there is changes more that 50 meters
-      fetchPostWithNewLocation(isRefreshing, initial, posts.length)
+      fetchPostWithNewLocation(isRefreshing, initial, posts.length, data?.posts?.length)
     }
   },[posts,islocationaccepted])
   
@@ -363,7 +387,12 @@ const home = () => {
 
   const [blockinguserinfo,setBlockingUserInfo] = useState({});
   const [dialog,setDialog] = useState(false);
-  const handleBlockUser = useCallback((blockinguserinfo) => {
+  const handleBlockUser = useCallback(async(blockinguserinfo) => {
+
+        const authenticated =  await isUserAuthenticated();
+        if (!authenticated) return; 
+
+
         setBlockingUserInfo(blockinguserinfo);
         setDialog(true)
       });
@@ -383,8 +412,15 @@ const home = () => {
     }
   }, [isBottomSheetOpen]);
 
+  
 
-  const handleReportPress = useCallback((postinfo) => {
+
+  const handleReportPress = useCallback(async(postinfo) => {
+
+      const authenticated =  await isUserAuthenticated();
+      if (!authenticated) return;
+
+
       console.log("reported")
       setReportInfo(postinfo)
       setIsBottomSheetOpen(true);
@@ -443,7 +479,9 @@ const home = () => {
 
    
 
-    const handleCommentIconPress = useCallback((post) => {
+    const handleCommentIconPress = useCallback(async (post) => {
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
       setCurrentSelectedPost(post);
       setIsFullWidthModalVisible(true);
     });
@@ -540,7 +578,10 @@ const home = () => {
       });
       
       const [selectedMediasInfo, setSelectedMediasInfo] = useState({})
-      const postSharePress = useCallback((mediaUrls, type, uid, postid)=> {
+      const postSharePress = useCallback(async(mediaUrls, type, uid, postid)=> {
+
+        const authenticated =  await isUserAuthenticated();
+        if (!authenticated) return;
 
         console.log("we here")
 
@@ -558,7 +599,10 @@ const home = () => {
 
       const [seletedPost, setSelectedPost] = useState(null);
       const [isLikersModalVisible, setLikersModalVisible] = useState(false);
-      const handleLikesPress = useCallback((post) => {
+      const handleLikesPress = useCallback(async(post) => {
+        const authenticated =  await isUserAuthenticated();
+        if (!authenticated) return;
+
         setSelectedPost(post);
         setLikersModalVisible(true);
       });
@@ -573,6 +617,7 @@ const home = () => {
     ({ item }) => (
       <Posts
         post={item}
+        isAuthenticated={isUserAuthenticated}
         activePost={activePost}
         userinfo={memoizedUserinfo}
         onCommentPress={handleCommentIconPress}
@@ -589,7 +634,7 @@ const home = () => {
         handleLikersPress={handleLikesPress}
       />
     ),
-    [memoizedUserinfo, isBottomSheetOpen, setIsBottomSheetOpen, handleCommentIconPress, handlePlayPress, onImagePress, handleReportPress, handleRemovePost, handleBlockUser,likesMap,setLikesMap,sharesMap,setSharesMap, activePost, postSharePress]
+    [memoizedUserinfo, isUserAuthenticated, isBottomSheetOpen, setIsBottomSheetOpen, handleCommentIconPress, handlePlayPress, onImagePress, handleReportPress, handleRemovePost, handleBlockUser,likesMap,setLikesMap,sharesMap,setSharesMap, activePost, postSharePress]
   );
 
   const snapPoinst = useMemo(() => ['40%'],[]);
@@ -733,8 +778,8 @@ const home = () => {
           const userInfo = await getData('@profile_info');
           const post = posts.find(post => post.id === activePost);
   
-          const ref = doc(db, `users/${post.user}/posts/${activePost}/views/${userInfo.uid}`);
-          await setDoc(ref, userInfo, {merge:true});
+          const ref = doc(db, `users/${post.user}/posts/${activePost}/views/${user.uid}`);
+          await setDoc(ref, userInfo || {uid:user.uid}, {merge:true});
 
           setViewedPosts((prev) => [...prev, activePost]);
         }
@@ -814,7 +859,10 @@ const home = () => {
       
     }
 
-    const handlePostPress = (id) =>{
+    const handlePostPress = async (id) =>{
+      const authenticated = await isUserAuthenticated();
+      if (!authenticated) return;
+      
       router.push({
         pathname: '/sharepost'
       });
@@ -863,7 +911,7 @@ const home = () => {
 
       const getStories = useCallback(async (callbackfunction) => {
 
-        const userinfo = await getData('@profile_info');
+       
           
               try {
                 console.log("getting initial stories");
@@ -874,7 +922,7 @@ const home = () => {
                     'Content-Type': 'application/json',
                   },
                   body: JSON.stringify({
-                    id: userinfo.uid, // Replace with the actual userid
+                    id: user.uid, // Replace with the actual userid
                   }),
                 });
             
@@ -895,12 +943,12 @@ const home = () => {
                 
               } catch (err) {
                
-                console.log(err+"errrr");
+                console.log(err+"stories");
                 setRefreshing(false);
                 return null;
               }
 
-      })
+      },[user])
 
      
       useEffect(() => {
@@ -963,7 +1011,11 @@ const home = () => {
           {(stories.length > 0 && (islocationaccepted || isFetchingPostsWithNewLocationLoading)) && <Stories isStoriesVisible={storiesVisible} stories={stories}  /> }
   
   
-          {!isRefreshing && posts.length === 0 ? islocationaccepted || isFetchingPostsWithNewLocationLoading ? <View style={{alignItems:'center',marginTop:30}}>
+          {!isRefreshing && posts.length === 0 ? islocationaccepted || isFetchingPostsWithNewLocationLoading ?
+
+          storedLocation !== null ?
+          
+          <View style={{alignItems:'center',marginTop:30}}>
   
             <TouchableOpacity onPress={handlePostPress}>
               <Image style={{height:70,width:70, tintColor:colorScheme === 'dark' ? 'white' : "black"}} source={require('@/assets/icons/galleryadd.png')}/>
@@ -971,7 +1023,7 @@ const home = () => {
   
             <Text style={{color:colorScheme === 'dark' ? 'white' : "black",fontSize:20, marginTop:10}}>Upload post!</Text>
   
-          </View> : islocationaccepted !== null && <View style={{alignItems:'center',marginTop:30}}>
+          </View> : <ActivityIndicator color={colorScheme === 'dark' ? "white" : "black"} size='large' /> : islocationaccepted !== null && <View style={{alignItems:'center',marginTop:30}}>
   
             <Text style={{color:colorScheme === 'dark' ? 'white' : "black", fontSize:20}}>Location is required</Text>
   
@@ -1148,7 +1200,7 @@ const home = () => {
               }
 
              
-              {<CustomDialog onclose={onDialogClose}  isVisible={dialogDownLoad}>
+              {dialogDownLoad && <CustomDialog onclose={onDialogClose}  isVisible={dialogDownLoad}>
 
                 {sharingUrls.length === 0 ? <View  style={{backgroundColor:colorScheme == 'dark' ? Colors.dark_gray : Colors.light_main ,padding:20, borderRadius:10,alignItems:'center'}} >
                   <CircularProgress

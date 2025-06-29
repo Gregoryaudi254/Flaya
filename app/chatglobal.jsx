@@ -41,6 +41,7 @@ import { setData } from '@/slices/dataChangeSlice';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import FloatingButton from '@/components/FloatingButton';
+import LocationPickerBottomsheet from '@/components/LocationPickerBottomsheet';
 
 // Memoized typing indicator component
 const TypingIndicator = React.memo(({ visible, oppUsername, colorScheme, animations }) => {
@@ -355,8 +356,20 @@ const chatglobal = React.memo(() => {
       });
     }, [oppUser.uid]);
 
-    const handleLocationPress = useCallback(() => {
+    const [showLocationSheet, setShowLocationSheet] = useState(false);
+
+    const showSheet = useCallback(() =>{
       bottomSheetRef.current?.snapToIndex(0);
+      bottomSheetRef.current?.snapToIndex(0);
+    },[bottomSheetRef])
+
+    const handleLocationPress = useCallback(() => {
+      setShowLocationSheet(true);
+
+      setTimeout(() => {
+        showSheet()
+      }, 3000); // Let it mount first before snapping
+      
     }, []);
 
     const handleCloseDialog = useCallback(() => {
@@ -1179,6 +1192,9 @@ const chatglobal = React.memo(() => {
       //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       //   }
       // };
+
+      const { userLocation, address } = dataState;
+
      
     return (
 
@@ -1264,14 +1280,14 @@ const chatglobal = React.memo(() => {
                 <Animated.View style={[
                   styles.sendButtonContainer,
                   {
-                    opacity: uiState.isTyping ? 1 : 0.6,
+                    
                     transform: [{ scale: uiState.isTyping ? 1 : 0.8 }],
                   }
                 ]}>
                   <TouchableOpacity 
                     onPress={() => handleSendMessage('text')}
                     style={[styles.modernSendButton, {
-                      backgroundColor: uiState.isTyping ? Colors.blue : (colorScheme === 'dark' ? '#444' : '#DDD'),
+                      backgroundColor: Colors.blue,
                     }]}
                     disabled={!uiState.isTyping}
                   >
@@ -1432,120 +1448,16 @@ const chatglobal = React.memo(() => {
         
 
 
-        <BottomSheet  
-            enablePanDownToClose={true} 
-            ref={bottomSheetRef}
-            index={initialSnapIndex}
-            backgroundStyle={{
-              backgroundColor: colorScheme === 'dark' ? '#1F1F1F' : '#FFFFFF',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-            }}
-            handleIndicatorStyle={{
-              backgroundColor: colorScheme === 'dark' ? '#666' : '#CCC',
-              width: 40,
-              height: 4,
-            }}
-            snapPoints={snapPoinst}>
-
-              <View style={[styles.modernBottomSheetContainer, {
-                backgroundColor: colorScheme === 'dark' ? '#1F1F1F' : '#FFFFFF',
-              }]}>
-
-                {/* Header */}
-                <View style={styles.bottomSheetHeader}>
-                  <View style={[styles.bottomSheetIconContainer, {
-                    backgroundColor: colorScheme === 'dark' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)',
-                  }]}>
-                    <Ionicons name="location" size={24} color="#22C55E" />
-                  </View>
-                  
-                  <View style={styles.bottomSheetHeaderText}>
-                    <Text style={[styles.bottomSheetTitle, {
-                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,
-                    }]}>
-                      Share Location
-                    </Text>
-                    <Text style={[styles.bottomSheetSubtitle, {
-                      color: colorScheme === 'dark' ? '#888' : '#666',
-                    }]}>
-                      Drag the map to select precise location
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Enhanced Map Container */}
-                {(
-                  <View style={styles.modernMapContainer}>
-                    <View style={[styles.mapWrapper, {
-                      backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-                      borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-                    }]}>
-                    <MapView
-                        style={styles.modernMapView}
-                    initialRegion={dataState.userLocation || {
-                      latitude: -1.2921,  // Nairobi coordinates as default
-                      longitude: 36.8219,
-                      latitudeDelta: 0.0922,
-                      longitudeDelta: 0.0421,
-                    }}
-                    provider="google"
-                    googleMapsApiKey="AIzaSyAPiEb105W4642ElH_5ZXX2Lrjx_H-UIqQ"
-                    onRegionChangeComplete={handleRegionChangeComplete}
-                        showsUserLocation={true}
-                        showsMyLocationButton={false}
-                        mapType="standard"
-                      />
-                      
-                      {/* Enhanced Center Marker */}
-                      <View style={styles.modernMarkerFixed}>
-                        <View style={styles.markerShadow}>
-                          <Ionicons name="location" size={32} color="#22C55E" />
-                        </View>
-                        <View style={styles.markerPulse} />
-                      </View>
-                    </View>
-                  </View>
-                )}
-
-                {/* Enhanced Address Section */}
-                <View style={[styles.modernAddressSection, {
-                  backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-                  borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-                }]}>
-                  <View style={styles.addressHeader}>
-                    <Ionicons name="location-outline" size={20} color={Colors.blue} />
-                    <Text style={[styles.addressLabel, {
-                      color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,
-                    }]}>
-                      Selected Location
-                    </Text>
-                  </View>
-              
-                  {dataState.address && (
-                    <Text style={[styles.addressText, {
-                      color: colorScheme === 'dark' ? '#AAA' : '#666',
-                    }]}>
-                      {dataState.address.formattedAddress}
-                    </Text>
-                  )}
-                  </View>
-
-                {/* Enhanced Send Button */}
-                <TouchableOpacity 
-                  onPress={handleOnSendLocationPress} 
-                  style={[styles.modernSendLocationButton, {
-                    backgroundColor: Colors.blue,
-                  }]}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="send" size={20} color="white" />
-                  <Text style={styles.sendLocationText}>Send Location</Text>
-                      </TouchableOpacity>
-
-              </View>
-
-          </BottomSheet>
+   { showLocationSheet && <LocationPickerBottomsheet
+      bottomSheetRef={bottomSheetRef}
+      initialSnapIndex={initialSnapIndex}
+      snapPoints={snapPoinst}
+      userLocation={userLocation}
+      address={address}
+      colorScheme={colorScheme}
+      handleRegionChangeComplete={handleRegionChangeComplete}
+      handleOnSendLocationPress={handleOnSendLocationPress}
+    />}
 
 
 

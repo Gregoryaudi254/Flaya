@@ -4,6 +4,8 @@ import React from 'react'
 const CustomDialog = ({ isVisible,onclose,children, ...rest}) => {
 
 
+  console.log("Im here from where though?")
+
 
     const content = (
 

@@ -27,6 +27,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/constants/firebase';
 import { getData, storeData } from '@/constants/localstorage';
 import { router } from 'expo-router';
+import { useAuth } from '@/constants/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +38,8 @@ const SearchScreen = () => {
   const textColor = isDark ? '#FFFFFF' : '#000000';
   const placeholderColor = isDark ? '#777777' : '#999999';
   const borderColor = isDark ? '#333333' : '#EEEEEE';
+
+  const {user} = useAuth()
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -132,9 +135,9 @@ const SearchScreen = () => {
         // Prepare the callable function
         const callbackFunction = httpsCallable(functions, 'searchAlgolia');
 
-        const userinfo = await getData('@profile_info');
+        
         const info = {
-          userid: userinfo.uid,
+          userid: user.uid,
           query: query,
           type: searchType !== 'all' ? searchType : undefined
         };
@@ -163,7 +166,7 @@ const SearchScreen = () => {
 
   const handlePress = async (item) => {
     const profileInfo = await getData('@profile_info');
-    const origin = item.user === profileInfo.uid ? 'currentuserprofile' : 'notcurrentuserprofile';
+    const origin = item.user === user.uid ? 'currentuserprofile' : 'notcurrentuserprofile';
 
     const updatedPost = {...item, userinfo: profileInfo, origin: origin};
     router.push({

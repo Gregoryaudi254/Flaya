@@ -18,7 +18,7 @@ export default function RootLayout() {
 
           <Stack.Screen name="index" options={{title:'Notifications'}} />
          
-           <Stack.Screen name="messaging" options={{ title: 'Messaging',headerShown:true}} /> 
+           <Stack.Screen name="messaging" options={{ title: 'Messaging',headerShown:true, headerShadowVisible:false}} /> 
 
            <Stack.Screen name="chat" options={{headerShown:true,title:''}} />
 

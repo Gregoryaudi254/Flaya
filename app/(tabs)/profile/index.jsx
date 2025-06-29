@@ -21,6 +21,7 @@ import { getData } from '@/constants/localstorage';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Colors } from '@/constants/Colors';
 import { useSelector } from 'react-redux';
+import { useAuth } from '@/constants/AuthContext';
 
 
 function TabScreens() {
@@ -124,7 +125,27 @@ export default function ProfileScreen() {
   const [hasstories,sethasstories] = useState(true);
   const [monetizationInfo, setMonetizationInfo] = useState(null);
 
+  const colorScheme = useColorScheme();
+  
+  const isDark = colorScheme == 'dark';
+
   const router = useRouter();
+
+  const {user} = useAuth()
+
+  const signUp = useCallback(() =>{
+    router.push('/signUp')
+  },[])
+
+  const signIn = useCallback(() =>{
+    router.push('/signIn')
+  },[])
+
+
+
+ 
+
+
 
   const handlePress = () =>{
     router.push({
@@ -145,7 +166,7 @@ export default function ProfileScreen() {
   const getUserInfo = async () =>{
     const userInfo = await getData('@profile_info');
 
-    if (userInfo === null) {
+    if (userInfo === null || userInfo === undefined) {
       return null;
     }
 
@@ -228,7 +249,7 @@ export default function ProfileScreen() {
 
   },[userdata])
 
-  const colorScheme = useColorScheme();
+
 
   const { value } = useSelector(state => state.data);
   
@@ -245,6 +266,37 @@ export default function ProfileScreen() {
       pathname: '/subscriptionPage'
     });
   };
+
+  if (user?.isAnonymous && user !== null) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center' }}>
+         <View style={[styles.container1, {backgroundColor:isDark ? "#121212" : "#F9F9F9"}]}>
+      <View style={styles.content}>
+        <Text style={[styles.title, {color:isDark ? 'white' : 'black'}]}>Join Us Today</Text>
+        <Text style={styles.subtitle}>
+          Create an account to unlock all features and get started
+        </Text>
+        
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={signUp}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.primaryButtonText}>Create Account</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.secondaryButton}
+         onPress={signIn}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.secondaryButtonText}>Already have an account?</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+      </SafeAreaView>
+    );
+  }
 
 
   return (
@@ -549,6 +601,71 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  container1: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+  
+   
+  },
+  content: {
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    color: 'gray',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  primaryButton: {
+    backgroundColor: Colors.red_orange,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    marginBottom: 12,
+    shadowColor: '#6366f1',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  secondaryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  secondaryButtonText: {
+    color: Colors.red_orange,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   headerImage: {
     color: '#808080',
     bottom: -90,

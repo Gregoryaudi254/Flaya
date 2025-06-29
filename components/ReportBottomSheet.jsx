@@ -25,6 +25,8 @@ const ReportBottomSheet = memo(({
     handleSheetChanges(index);
   },[handleSheetChanges])
 
+
+  console.log("Report")
   return (
     <BottomSheet
       enablePanDownToClose={true}

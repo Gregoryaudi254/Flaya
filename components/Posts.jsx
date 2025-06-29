@@ -29,7 +29,7 @@ import { setVolume } from '@/slices/volumeSlice';
 import { timeAgoPost } from '@/constants/timeAgoPost';
 import Ionicons from '@expo/vector-icons/Ionicons';
   
-const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post, activePost, onCommentPress, handlePlayPress, onImagePress, onReportPress, userinfo, handleRemovePost, handleBlockUser, handleSharePostPress, handleLikersPress }) => {
+const Posts = React.memo(({ isAuthenticated, setLikesMap, likesMap, setSharesMap, sharesMap, post, activePost, onCommentPress, handlePlayPress, onImagePress, onReportPress, userinfo, handleRemovePost, handleBlockUser, handleSharePostPress, handleLikersPress }) => {
   const videoRef = useRef(null);
   const colorScheme = useColorScheme();
   const router = useRouter();
@@ -167,6 +167,9 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
   }, [state.isVideoPlaying, handleVideoPlayback]);
 
   const updateInteranctions = useCallback(async (path) => {
+
+    
+    
     const userinfo = await getData('@profile_info');
     const ref = doc(db,`users/${post.user}/posts/${post.id}/${path}/${userinfo.uid}`);
     await setDoc(ref, userinfo, {merge: true});
@@ -175,6 +178,10 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
   // Optimized like handling with batched updates
   const handleOnLiked = useCallback(async () => {
     try {
+      const authentication = await isAuthenticated();
+      if (!authentication) return;
+
+
       const likedPosts = await getData('@liked_posts') || [];
       
       if (!likedPosts.includes(post.id)) {
@@ -299,6 +306,9 @@ const Posts = React.memo(({ setLikesMap, likesMap, setSharesMap, sharesMap, post
   const [isShared,setShared] = useState(false);
 
   const onRepostSelect = useCallback(async()=>{
+    const authentication = await isAuthenticated();
+    if (!authentication) return;
+    
     let sharedposts = await getData('@shared_posts')
 
     if (!sharedposts) {

@@ -24,6 +24,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import ReportBottomSheet from '@/components/ReportBottomSheet';
 import MemoizedBottomSheetUser from '@/components/MemoizedBottomSheetUser';
 import OrderBookingBottomSheet from '@/components/OrderBookingBottomSheet';
+import { useAuth } from '@/constants/AuthContext';
 
 const oppuserprofile = () => {
 
@@ -32,6 +33,8 @@ const oppuserprofile = () => {
   const colorScheme = useColorScheme();
 
     const router = useRouter();
+
+
 
     const bottomSheetRef = useRef(null);
     const reportbottomSheetRef = useRef(null);
@@ -42,6 +45,26 @@ const oppuserprofile = () => {
     const {uid} = useLocalSearchParams();
 
     const [isblocked,setblocked] = useState();
+
+    const {user} = useAuth()
+
+    const isUserAuthenticated = useCallback(async () => {
+      const userinfo = await getData('@profile_info');
+      console.log("Checking authenication")
+      if (user.isAnonymous) {
+        router.push('/signUp')
+        return false;
+      }
+  
+      if (!userinfo) {
+        router.push('/usernameinput')
+        return false;
+      }
+  
+  
+      return true;
+    },[user])
+  
 
 
     useEffect(() => {
@@ -66,7 +89,6 @@ const oppuserprofile = () => {
 
     const getUserInfo = async () => {
 
-       const currentuserInfo = await getData('@profile_info')
         const ref = doc(db,`users/${uid}`);
         const userInfoSnap = await getDoc(ref);
 
@@ -82,7 +104,7 @@ const oppuserprofile = () => {
         if (profileviewstatus === "friends") {
           // check if opp use has subscribed
 
-          const subscribeRef = doc(db, `users/${currentuserInfo.uid}/subsrcibers/${uid}`);
+          const subscribeRef = doc(db, `users/${user.uid}/subsrcibers/${uid}`);
           const snap = await getDoc(subscribeRef);
 
           if (!snap.exists()) {
@@ -99,7 +121,7 @@ const oppuserprofile = () => {
          const blockedUsers = userInfoSnap.data().blockedusers;
 
          if (blockedUsers) {
-          const isCurrentUserBlocked = blockedUsers.some(blocked => blocked === currentuserInfo.uid);
+          const isCurrentUserBlocked = blockedUsers.some(blocked => blocked === user.uid);
           setoppuserblockedcurrentUser(isCurrentUserBlocked)
          }
 
@@ -110,7 +132,7 @@ const oppuserprofile = () => {
         const blockers = userInfoSnap.data().blockers;
 
         if (blockers) {
-          const blockedTheUser = blockers.some(blockerid => blockerid === currentuserInfo.uid);
+          const blockedTheUser = blockers.some(blockerid => blockerid === user.uid);
           setblocked(blockedTheUser);
         }
 
@@ -124,9 +146,7 @@ const oppuserprofile = () => {
 
     const getSubscription = async () => {
 
-      const userInfo = await getData('@profile_info')
-
-      const ref = doc(db,`users/${uid}/subscribers/${userInfo.uid}`);
+      const ref = doc(db,`users/${uid}/subscribers/${user.uid}`);
       const snap = await getDoc(ref);
 
       console.log("getting subscribed "+snap.exists())
@@ -139,14 +159,19 @@ const oppuserprofile = () => {
     useEffect(() => {
         getUserInfo();
         getSubscription();
-    },[])
+    },[user])
   
-    const handleMenuPress = () =>{
+    const handleMenuPress = async () =>{
+        const authentication = await isUserAuthenticated();
+        if (!authentication) return;
         bottomSheetRef.current?.snapToIndex(0);
     }
 
     // add to subscription
     const handleSuPbscribePress = async () =>{
+
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
 
       const currentUserInfo = await getData('@profile_info')
       //check if is opp user is subscribed
@@ -246,7 +271,10 @@ const oppuserprofile = () => {
     }
 
 
-    const goToMessaging = () => {
+    const goToMessaging = async () => {
+
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
 
       if (userInfo === null) return;
       
@@ -267,6 +295,7 @@ const oppuserprofile = () => {
     const [lastVisiblePost,setLastVisible] = useState(null);
     const [posts,setPosts] = useState([]);
 
+    const [postsLoaded, setPostsLoaded] = useState(false)
 
     const getPosts = useCallback(async () => {
      
@@ -287,6 +316,8 @@ const oppuserprofile = () => {
       setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]); // Save the last document
 
       setPosts(posts);
+
+      setPostsLoaded(true);
     })
 
 
@@ -314,7 +345,9 @@ const oppuserprofile = () => {
       }, [isBottomSheetOpen]);
 
        // Add new function to handle order/book button press
-    const handleOrderBookPress = () => {
+    const handleOrderBookPress = async () => {
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
       if (userInfo && userInfo.isbusinessaccount) {
         orderBottomSheetRef.current?.snapToIndex(0);
       }
@@ -666,13 +699,12 @@ const oppuserprofile = () => {
               onEndReachedThreshold={0.5}
               onEndReached={getMorePosts}
               renderItem={({item}) =>(
-                <ProfilePostItem post={item} userinfo={userInfo}/>
-                  
+                <ProfilePostItem post={item} userinfo={userInfo} currentuserid={user.uid}/>  
               )}
               data={isblocked || isoppuserblockedcurrentUser || isaccountprivate ? [] : posts}/>
            }
 
-           {(posts.length < 1 && !refreshing && !isblocked && !isoppuserblockedcurrentUser && !isaccountprivate) &&
+           {(posts.length < 1 && !refreshing && !isblocked && !isoppuserblockedcurrentUser && !isaccountprivate && postsLoaded) &&
             <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,position:'absolute',alignSelf:'center',marginTop:'70%'}}>No posts yet</Text>}
 
 

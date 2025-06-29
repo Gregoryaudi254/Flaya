@@ -8,7 +8,8 @@ import {
   FlatList,
   Animated,
   StatusBar,
-  Image
+  Image,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,6 +17,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/constants/AuthContext';
+import { useToast } from 'react-native-toast-notifications';
 
 // Animated dot indicator component
 const Indicator = ({ scrollX, data }) => {
@@ -115,6 +118,16 @@ const WalkthroughScreen = () => {
   
   // Animation for icon pulse
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const {isAuthenticated, user, signanonymously} = useAuth();
+
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      router.replace('/(tabs)')
+    }
+  }, [isAuthenticated,user]);
   
   // Start pulsing animation
   useEffect(() => {
@@ -167,9 +180,28 @@ const WalkthroughScreen = () => {
       finishOnboarding();
     }
   };
+
+  const toast = useToast();
+
+  function showToast(message) {
+    toast.show(message, {
+      type: "normal",
+      placement: "bottom",
+      duration: 2000,
+      offset: 30,
+      animationType: "zoom-in",
+    });
+  }
   
-  const finishOnboarding = () => {
-    router.push('/(auth)/signUp');
+  const finishOnboarding = async () => {
+    setIsLoading(true);
+
+    const success = await signanonymously();
+
+    if (!success) {
+      showToast("Something went wrong");
+      setIsLoading(false);
+    }
   };
   
   const renderItem = ({ item, index }) => {
@@ -239,6 +271,7 @@ const WalkthroughScreen = () => {
             <View style={styles.buttonContainer}>
               <TouchableOpacity
                 style={styles.skipButton}
+                disabled={isLoading}
                 onPress={finishOnboarding}
               >
                 <Text style={styles.skipButtonText}>Skip</Text>
@@ -247,10 +280,15 @@ const WalkthroughScreen = () => {
               <TouchableOpacity
                 style={styles.nextButton}
                 onPress={handleNext}
-              >
-                <Text style={styles.nextButtonText}>
-                  {currentIndex === data.length - 1 ? 'Get Started' : 'Next'}
-                </Text>
+                disabled={isLoading}
+              > 
+                {isLoading ? (
+                  <ActivityIndicator size="small" color='black' />
+                ) : (
+                  <Text style={styles.nextButtonText}>
+                    {currentIndex === data.length - 1 ? 'Get Started' : 'Next'}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

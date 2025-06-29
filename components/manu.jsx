@@ -190,7 +190,7 @@ const StoriesItem = React.memo(({ activeStory, item, isStoriesVisible, stories }
     }
   },[activeStory,item,stories])
 
- 
+
   useEffect(() => {
     const handleVideoPlayback = async () => {
       if (!videoRef.current || !isStoriesVisible || activeStory !== item.id) {
@@ -199,25 +199,25 @@ const StoriesItem = React.memo(({ activeStory, item, isStoriesVisible, stories }
       }
 
       try {
-        const status = await videoRef.current.getStatusAsync();
+            const status = await videoRef.current.getStatusAsync();
 
-        
-        if (status?.isLoaded) {
+  
+            if (status?.isLoaded) {
           console.log("Loaded")
-          if (!status.isPlaying) {
+              if (!status.isPlaying) {
             await videoRef.current.setPositionAsync(0);
-            await videoRef.current.playAsync();
-          }
-        } else {
+                await videoRef.current.playAsync();
+              }
+            } else {
           console.log("Loading")
-          await videoRef.current.loadAsync(
+              await videoRef.current.loadAsync(
             { uri:activeThread.content },
-            {},
+                {},
             true
-          );
-          await videoRef.current.playAsync();
-        }
-      } catch (e) {
+              );
+              await videoRef.current.playAsync();
+            }
+          } catch (e) {
         console.log('Video playback error:', e);
       }
     };

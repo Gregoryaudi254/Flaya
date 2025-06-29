@@ -1,7 +1,7 @@
-import { signOut } from 'firebase/auth';
+import { linkWithCredential, signOut } from 'firebase/auth';
 import { auth ,db} from '@/constants/firebase';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged,createUserWithEmailAndPassword,GoogleAuthProvider,signInWithCredential,signInWithEmailAndPassword,signInWithPhoneNumber,PhoneAuthProvider,EmailAuthProvider ,reauthenticateWithCredential,updatePassword,sendPasswordResetEmail} from 'firebase/auth';
+import { onAuthStateChanged,createUserWithEmailAndPassword,GoogleAuthProvider,signInWithCredential,signInAnonymously, signInWithEmailAndPassword,signInWithPhoneNumber,PhoneAuthProvider,EmailAuthProvider ,reauthenticateWithCredential,updatePassword,sendPasswordResetEmail} from 'firebase/auth';
 import { doc, setDoc ,getDoc, updateDoc} from 'firebase/firestore';
 import * as AuthSession  from 'expo-auth-session'
 
@@ -33,7 +33,7 @@ const AuthContext = createContext({});
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setisAuthenticated] = useState(undefined);
-
+  const [isAccountexist, setAccountExists] = useState(null);
   const [userInfo, setuserInfo] = useState(null);
   
 
@@ -115,73 +115,62 @@ export const AuthProvider = ({ children }) => {
   
 
   const signInGoogle = async () => {
-    
     try {
       await GoogleSignin.hasPlayServices();
       const userDetails = await GoogleSignin.signIn();
-
-     
-
+  
       const credential = GoogleAuthProvider.credential(userDetails.data.idToken);
-      const userCredential = await signInWithCredential(auth, credential);
-
-      const user = userCredential.user;
-
-      await storeData('@auth_type',"gmail")
-
-
-    // Reference to the user's document in the "users" collection
-      const userRef = doc(db, 'users', user.uid);
-
-    // Check if the user document exists in Firestore
-      const userDoc = await getDoc(userRef);
-
-      if (userDoc.exists()) {
-        // User already exists, return false
-        console.log('User already exists in Firestore.');
-
-       // router.replace('/(tabs)')
-        
-      } else {
-
-        const detailsDevice = {
-          deviceName: await DeviceInfo.getDeviceName(),
-          brand: DeviceInfo.getBrand(),
-          model: DeviceInfo.getModel(),
-          systemVersion: DeviceInfo.getSystemVersion(),
-          manufacturer: await DeviceInfo.getManufacturer(),
-          ip: await DeviceInfo.getIpAddress()
-        };
+      let user;
   
-        const deviceid = await DeviceInfo.getUniqueId();
+      try {
+        // Try to upgrade anonymous user
+        await linkWithCredential(auth.currentUser, credential);
+        user = auth.currentUser;
+      } catch (error) {
+        console.log('Linking error:', error);
   
-        // User does not exist, create a new document
-        await setDoc(userRef, {
-          uid: user.uid,
-          version:5,
-          signintype:'gmail',
-          email: user.email,
-          infoarray:[user.email],
-          name: user.displayName || 'Anonymous', // Set default values if needed
-          createdAt: new Date().toISOString(),
-          devicedetails:detailsDevice,
-          devicecreatorid:deviceid
-        });
-
-        console.log('User document created successfully.');
-       
+        if (error.code === 'auth/credential-already-in-use') {
+         
+  
+          // Sign in with Google account instead
+          const result = await signInWithCredential(auth, credential);
+          user = result.user;
+        } else {
+          throw error;
+        }
       }
-
+  
+      if (!user) {
+        console.error('Sign-in failed, user is undefined');
+        return false;
+      }
+  
+      await storeData('@auth_type', 'gmail');
+  
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+  
+      if (userDoc.exists()) {
+        console.log('User already exists in Firestore.');
+      } else {
+        await setDoc(userRef, {
+          version: 5,
+          signintype: 'gmail',
+          email: user.email,
+          infoarray: [user.email],
+          name: user.displayName || 'Anonymous',
+        });
+        console.log('User document created successfully.');
+      }
+  
       return true;
-
-      
-    } catch (e) {
-
-      console.log("something went wrong "+e)
-
+  
+    } catch (err) {
+      console.error('Google Sign-In failed:', err);
       return false;
     }
   };
+  
 
   const toast = useToast()
 
@@ -211,6 +200,13 @@ export const AuthProvider = ({ children }) => {
         setUser(user);
 
         try{
+
+          if (user.isAnonymous){
+            setisAuthenticated(true);
+            return;
+          }
+
+
           // First check if we have cached profile info
           const userinfo = await getData('@profile_info');
 
@@ -259,11 +255,13 @@ export const AuthProvider = ({ children }) => {
               await storeData('@settings', settings);
               
               setisAuthenticated(true);
+              setAccountExists(true);
               console.log("User authenticated with completed profile");
             } else {
               // User exists but hasn't completed profile setup
               console.log("User exists but profile not complete");
               setisAuthenticated(false);
+              setAccountExists(false)
             }
           } else {
             // User does not exist in Firestore
@@ -291,6 +289,7 @@ export const AuthProvider = ({ children }) => {
     await deleteData('@liked_posts');
     await deleteData('@profile_info');
     await deleteData('@settings');
+    await deleteData('@stored_coordinates')
     await signOut(auth);
 
     const userRef = doc(db, `users/${user.uid}`);
@@ -305,17 +304,15 @@ export const AuthProvider = ({ children }) => {
     // This will also trigger a global logout
   };
 
-  
+  // Sign in anonymously
+  const signanonymously = async () => {
 
-  const signUp = async (email, password,name) => {
     try {
-
-
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInAnonymously(auth);
+      console.log("user credenial "+userCredential)
       const user = userCredential.user;
-
-      await storeData('@auth_type','email');
-
+      await storeData('@auth_type','anonymous');
+  
       const detailsDevice = {
         deviceName: await DeviceInfo.getDeviceName(),
         brand: DeviceInfo.getBrand(),
@@ -324,29 +321,56 @@ export const AuthProvider = ({ children }) => {
         manufacturer: await DeviceInfo.getManufacturer(),
         ip: await DeviceInfo.getIpAddress()
       };
-
+  
       const deviceid = await DeviceInfo.getUniqueId();
-      
+  
+      const userRef = doc(db, 'users', user.uid);
+  
+      await setDoc(userRef, {
+        uid: user.uid,
+        version:5,
+        name: 'Anonymous',
+        signintype:'anonymous',
+        createdAt: new Date().toISOString(),
+        devicedetails:detailsDevice,
+        devicecreatorid:deviceid
+      });
+  
+      return true;
+
+    } catch(e){
+      console.log("error signing anonymously"+e)
+      return false
+    }
+   
+  };
+
+  
+
+  const signUp = async (email, password, name) => {
+    try {
 
 
+      const userCredential = EmailAuthProvider.credential(email, password);
+      await linkWithCredential(auth.currentUser, userCredential);
+      const user = auth.currentUser;
+
+      await storeData('@auth_type','email');
+
+    
       try {
         // Create a reference to the user's document in the "users" collection
         const userRef = doc(db, 'users', user.uid);
 
         const userDetails = {
-          uid: user.uid,
-          version:5,
           signintype:'email',
           email: email,
           infoarray:[email],
           name: name || 'Anonymous', // Set default values if needed
-          createdAt: new Date().toISOString(),
-          devicedetails:detailsDevice,
-          devicecreatorid:deviceid
         }
     
         // Set the document with user data
-        await setDoc(userRef, userDetails); // 'merge: true' allows merging with existing data
+        await setDoc(userRef, userDetails,{merge:true}); // 'merge: true' allows merging with existing data
         console.log('User document successfully written!');
 
         return {status:"passed"}
@@ -367,7 +391,7 @@ export const AuthProvider = ({ children }) => {
 
     try {
       
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email, password);
 
       await storeData('@auth_type','email');
 
@@ -383,7 +407,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, logout,signUp,signIn,isAuthenticated ,updateUserPassword,handlePasswordReset,signInGoogle}}>
+    <AuthContext.Provider value={{ user, isAccountexist, signanonymously, logout,signUp,signIn,isAuthenticated ,updateUserPassword,handlePasswordReset,signInGoogle}}>
       {children}
     </AuthContext.Provider>
   );

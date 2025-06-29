@@ -295,7 +295,7 @@ const messaging = React.memo(() => {
     }
 
     setlocationaccepted(true);
-    await storeUserLocation(currentLocation);
+    await storeUserLocation(currentLocation, userInfo.uid);
     const onlineUsers = await getDataBackend("getOnlineUsers", {id:userInfo.uid});
   
     if (onlineUsers.length > 0) {

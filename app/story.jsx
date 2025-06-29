@@ -134,7 +134,7 @@ const story = () => {
 
   const setViewer = async () => {
     const userinfo = await getData('@profile_info');
-    if (!isCurrentUser) {
+    if (!isCurrentUser && userinfo) {
 
       const currentLocation = await getLocation();
 
@@ -160,8 +160,6 @@ const story = () => {
 
   useEffect(() => {
     getStory();
-
-
   },[])
 
   const addViewedThread = useCallback((threadId) => {

@@ -32,7 +32,7 @@ const interactingusers = React.memo(({ isVisible, onClose, info}) => {
   const router = useRouter();
   const flatListRef = useRef(null);
 
-  console.log(JSON.stringify(info)+ '')
+  console.log("Likers")
 
 
   const [interactingusers,setinteractingusers] = useState([])

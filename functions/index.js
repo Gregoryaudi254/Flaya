@@ -2444,7 +2444,7 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
                 };
             })
             .sort((a, b) => a.distance - b.distance)
-            .slice(0, 4);
+            .slice(0, 6);
 
   console.log("areas "+JSON.stringify(sortedResults.map((area) => {
     return {latitude:area.coordinates._latitude, longitude:area.coordinates._longitude};
@@ -2816,8 +2816,15 @@ exports.getStoriesNearby = functions.https.onRequest(async (req, res) => {
     const userSettings = userSettingsSnap.data();
     const sortBy = userSettings.sortstoriesBy || "random"; // Default to 'latest' if no preference
 
-    const latitude = userSettings.coordinates.latitude;
-    const longitude = userSettings.coordinates.longitude;
+    const coordinates = userSettings.coordinates;
+
+    let latitude = -1.1429242;
+    let longitude = 36.9769087;
+
+    if (coordinates) {
+      latitude = coordinates.latitude;
+      longitude = coordinates.longitude;
+    }
 
     console.log("longitude "+longitude + "lat "+ latitude);
 

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View ,Image,TouchableOpacity, TouchableWithoutFeedback} from 'react-native'
-import React,{useState} from 'react'
+import React,{useCallback, useState} from 'react'
 import { Colors } from '@/constants/Colors'
 import moment from 'moment'
 
@@ -16,89 +16,99 @@ const UpdateItem = React.memo(({update:{mutual,profilephoto,postphoto,iscollecti
 
   const colorScheme = useColorScheme()
 
-  const handleButtonPress = async () =>{
+  const handleButtonPress = useCallback(async () =>{
       
-      const currentUserInfo = await getData('@profile_info')
-      //check if is opp user is subscribed
-      const ref = doc(db, `users/${senderid}/subscribers/${currentUserInfo.uid}`);
+    const currentUserInfo = await getData('@profile_info')
+    //check if is opp user is subscribed
+    const ref = doc(db, `users/${senderid}/subscribers/${currentUserInfo.uid}`);
 
-      const updateRef = doc(db, `users/${currentUserInfo.uid}/updates/${id}`);
+    const updateRef = doc(db, `users/${currentUserInfo.uid}/updates/${id}`);
 
-      const batch = writeBatch(db);
-      batch.update(updateRef, {mutual:!isMutual})
+    const batch = writeBatch(db);
+    batch.update(updateRef, {mutual:!isMutual})
 
-      if (!isMutual) {
+    if (!isMutual) {
 
-        const currentuserinfo = {
-          profilephoto:currentUserInfo.profilephoto,
-          username:currentUserInfo.username,
-          id:currentUserInfo.uid,
-          createdAt:serverTimestamp()
-        }
-
-        batch.set(ref, currentuserinfo);
-
-      }else {
-        batch.delete(ref);
+      const currentuserinfo = {
+        profilephoto:currentUserInfo.profilephoto,
+        username:currentUserInfo.username,
+        id:currentUserInfo.uid,
+        createdAt:serverTimestamp()
       }
 
-      // Step 3: Commit the batch
-      try {
-        await batch.commit();
-        console.log("Batch operations committed successfully!");
-      } catch (error) {
-        console.log("Error committing batch operations:", error);
-      }
-  
-      setMutual(!isMutual)
-  }
+      batch.set(ref, currentuserinfo);
 
-  const currentItemWeek = moment(timestamp, 'YYYY-MM-DD HH:mm:ss').week();
+    }else {
+      batch.delete(ref);
+    }
 
-  // Parse the timestamp of the previous item, if it exists
-  const prevItemWeek = prevItem !== null
-    ? moment(prevItem.timestamp, 'YYYY-MM-DD HH:mm:ss').week()
-    : null;
+    // Step 3: Commit the batch
+    try {
+      await batch.commit();
+      console.log("Batch operations committed successfully!");
+    } catch (error) {
+      console.log("Error committing batch operations:", error);
+    }
 
+    setMutual(!isMutual)
+}, []
+)
+  const getItemMoment = useCallback((ts) => {
+    if (typeof ts === 'string') {
+      return moment(ts, 'YYYY-MM-DD HH:mm:ss');
+    } else if (ts && typeof ts.toDate === 'function') {
+      // Firestore timestamp
+      return moment(ts.toDate());
+    } else {
+      return moment(ts);
+    }
+  }, []);
 
-  const timestampDate = timestamp.toDate();
-  const currentDate = moment(); // Current time
-  const itemDate = moment(timestampDate); // Item time
+  const currentDate = moment();
+  const itemDate = getItemMoment(timestamp);
+  const prevItemDate = prevItem ? getItemMoment(prevItem.timestamp) : null;
   
   // Calculate days difference
   const days = currentDate.diff(itemDate, 'days');
+  const daysPrev = prevItemDate ? currentDate.diff(prevItemDate, 'days') : null;
   
-  const daysPrev = prevItem !== null
-    ? currentDate.diff(moment(prevItem.timestamp.toDate()), 'days')
-    : 0;
-
+  const getStampInfo = useCallback((days, daysPrev) => {
+    // Determine current item's category
+    let currentCategory;
+    if (days <= 7) {
+      currentCategory = 'Recent';
+    } else if (days <= 30) {
+      currentCategory = 'Old';
+    } else if (days <= 60) {
+      currentCategory = 'Last Month';
+    } else {
+      currentCategory = 'Older';
+    }
+    
+    // If there's no previous item, show the current category
+    if (prevItem === null) {
+      return currentCategory;
+    }
+    
+    // Determine previous item's category
+    let prevCategory;
+    if (daysPrev <= 7) {
+      prevCategory = 'Recent';
+    } else if (daysPrev <= 30) {
+      prevCategory = 'Old';
+    } else if (daysPrev <= 60) {
+      prevCategory = 'Last Month';
+    } else {
+      prevCategory = 'Older';
+    }
+    
+    // Only show section header if category changed
+    return currentCategory !== prevCategory ? currentCategory : null;
+  },[])
   
-
-
-  function stampInfo (days,daysPrev){
+  const stampContentInfo = getStampInfo(days, daysPrev);
 
  
-
-    if(days < 7 && prevItem === null){
-      return 'Recent'
-    }
-
-    if(days > 7 && daysPrev < 7){
-      return  'Last month'
-    }
-
-    if(days > 32 && daysPrev < 32){
-      return  'Older'
-    }
-
-    return null;
-
-  }
-
-  const stamContentInfo = stampInfo(days,daysPrev)
-
-  // Check if the current item's date is different from the previous item's date
-  const showStamp = currentItemWeek !== prevItemWeek;
 
   const numberOfInteractions = count || 0; 
   let messageInteraction = null;
@@ -116,9 +126,9 @@ return (
 
   <View style={{flex:1}}>
 
-    { stamContentInfo && 
+    { stampContentInfo && 
       <Text style={{fontSize:20,fontWeight:'bold',color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}}>
-        {stamContentInfo}
+        {stampContentInfo}
       </Text>
     }
 

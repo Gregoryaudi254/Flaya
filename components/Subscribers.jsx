@@ -27,6 +27,8 @@ const Subscribers = () => {
     console.log("getting posts")
 
     const userInfo = await getData('@profile_info');
+
+    if (userInfo === null || userInfo === undefined) return;
     setUserInfo(userInfo)  
     const subRef = collection(db, `users/${userInfo.uid}/subscribed`);
     const q = query(subRef, orderBy('createdAt', 'desc'), limit(20));

@@ -173,10 +173,12 @@ export const getDataBackend = async(callback,info,setRefreshing = null) =>{
         return null
       }
 
-      console.log("Location")
+      
 
       // Get the user's current location
       let currentLocation = await Location.getCurrentPositionAsync({});
+
+      console.log("Location" + currentLocation);
 
       return currentLocation;
 
@@ -189,20 +191,27 @@ export const getDataBackend = async(callback,info,setRefreshing = null) =>{
   }
 
 
-  export const storeUserLocation = async (location) => {
+  export const storeUserLocation = async (location, uid) => {
     const userinfo = await getData('@profile_info');
 
+    if (!uid || !location) return;
 
-    userinfo.coordinates = {
-      latitude:location.coords.latitude,
-      longitude:location.coords.longitude
-    };
 
-   
-    await storeData('@profile_info',userinfo)
+    if (userinfo) {
 
-    const userRef = doc(db, 'users', userinfo.uid);
+      userinfo.coordinates = {
+        latitude:location.coords.latitude,
+        longitude:location.coords.longitude
+      };
+      await storeData('@profile_info',userinfo)
+    }
+
+    await storeData('@stored_coordinates', {latitude:location.coords.latitude, longitude:location.coords.longitude})
+
+    const userRef = doc(db, 'users', uid);
     // Set the document with user data
+
+    console.log("storage ", JSON.stringify(location) )
 
     try{
       await setDoc(userRef, {coordinates: new GeoPoint(location.coords.latitude,location.coords.longitude)}, { merge: true });

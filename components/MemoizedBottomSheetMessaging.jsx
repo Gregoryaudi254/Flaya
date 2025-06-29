@@ -101,10 +101,10 @@ const MemoizedBottomSheetMessaging = memo(({
   );
 
   return (
-    <BottomSheet  
-      enablePanDownToClose={true} 
-      ref={bottomSheetRef}
-      index={initialSnapIndex}
+  <BottomSheet  
+    enablePanDownToClose={true} 
+    ref={bottomSheetRef}
+    index={initialSnapIndex}
       backgroundStyle={{
         backgroundColor: isDark ? '#1F1F1F' : '#FFFFFF',
         borderTopLeftRadius: 24,
@@ -115,8 +115,8 @@ const MemoizedBottomSheetMessaging = memo(({
         width: 40,
         height: 4,
       }}
-      snapPoints={snapPoinst}
-    >
+    snapPoints={snapPoinst}
+  >
       <BottomSheetView style={styles.container}>
         <Animated.View style={[
           styles.content,
@@ -139,8 +139,8 @@ const MemoizedBottomSheetMessaging = memo(({
                 <Text style={[styles.username, {
                   color: isDark ? Colors.light_main : Colors.dark_main,
                 }]}>
-                  {selectedMessage?.username}
-                </Text>
+        {selectedMessage?.username}
+      </Text>
                 <Text style={[styles.messagePreview, {
                   color: isDark ? '#888' : '#666',
                 }]}>
@@ -164,7 +164,7 @@ const MemoizedBottomSheetMessaging = memo(({
                 color: isDark ? Colors.light_main : Colors.dark_main,
               }]}>
                 Message Request
-              </Text>
+          </Text>
               <View style={styles.requestButtonsContainer}>
                 <RequestActionButton
                   icon="checkmark-circle"
@@ -193,7 +193,7 @@ const MemoizedBottomSheetMessaging = memo(({
               color: isDark ? Colors.light_main : Colors.dark_main,
             }]}>
               Actions
-            </Text>
+        </Text>
 
             <View style={styles.actionsGrid}>
               {/* Mark as Read - only show if unread and not sender */}
@@ -219,11 +219,11 @@ const MemoizedBottomSheetMessaging = memo(({
                 destructive={true}
               />
             </View>
-          </View>
+    </View>
 
         </Animated.View>
       </BottomSheetView>
-    </BottomSheet>
+  </BottomSheet>
   );
 });
 

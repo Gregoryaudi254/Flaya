@@ -47,8 +47,8 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
               <Text style={[styles.modernDateText, {
                 color: isDark ? '#AAA' : '#666'
               }]}>
-                {formatTimestamp(timestamp,true)}
-              </Text>
+            {formatTimestamp(timestamp,true)}
+            </Text>
             </View>
         )}
 
@@ -83,8 +83,8 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
                     height: 2,
                   },
                   shadowOpacity: isSenderCurrentUser ? 0.3 : 0.1,
-                  shadowRadius: 3,
-                  elevation: 3,
+                  shadowRadius: 1,
+                 
                 },
                 messageType === 'image' ? styles.imageBubblePadding : styles.textBubblePadding
               ]}>
@@ -133,7 +133,7 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
                           }]}>
                             {mainmessage.location.address}
                           </Text>
-                        </View>
+                    </View>
                     )}
                         
                   </View>
@@ -152,7 +152,7 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
                 )}
 
                 {messageType === 'image' && (
-                    <Image 
+                        <Image
                         style={styles.modernMessageImage} 
                         source={{uri: Array.isArray(images) ? images[0] : images}} 
                         resizeMode="cover"
@@ -187,7 +187,7 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
                             Tap to view on map
                           </Text>
                         </View>
-                        
+
                     </View>
                 )}
 
@@ -214,7 +214,7 @@ const ChatItem = ({chat:{senderid,message,messageType,images,status,mainmessage,
             </View>
 
         </View>
-
+      
     </View>)
   )
 }

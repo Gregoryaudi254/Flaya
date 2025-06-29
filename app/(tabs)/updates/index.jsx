@@ -13,28 +13,42 @@ import { Colors } from '@/constants/Colors'
 import { useColorScheme } from '@/hooks/useColorScheme'
 import Interactingusers from '@/components/interactingusers'
 import Animated from 'react-native-reanimated'
+import { useAuth } from '@/constants/AuthContext'
 const index = () => {
 
-    const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme == 'dark';
 
-    console.log("messaging");
+  const router = useRouter();
 
-    const colorScheme = useColorScheme();
+  
+  const [updates,setUpdates] = useState([]);
 
-    const [updates,setUpdates] = useState([]);
+  const [loadingmore,setLoadingMore] = useState(false);
+  const [isrefreshing, setrefreshing] = useState(true);
+ 
+  const [lastVisiblePost,setLastVisible] = useState(null);
 
-    const [loadingmore,setLoadingMore] = useState(false);
-    const [isrefreshing, setrefreshing] = useState(true);
-   
-    const [lastVisiblePost,setLastVisible] = useState(null);
+  const [isLoadingPost,setLoadingPost] = useState(false);
 
-    const [isLoadingPost,setLoadingPost] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [userInfo, setUserInfo] = useState(null);
 
-    const [unreadCount, setUnreadCount] = useState(0);
-    const [userInfo, setUserInfo] = useState(null);
+  const [isFullWidthModalVisible, setisFullWidthModalVisible] = useState(false);
 
-    const [isFullWidthModalVisible, setisFullWidthModalVisible] = useState(false)
+  const [selectedcollectionInfo,setSelectedcollectionInfo] = useState({});
 
+
+
+  const {user} = useAuth()
+
+  const signUp = useCallback(() =>{
+    router.push('/signUp')
+  },[])
+
+  const signIn = useCallback(() =>{
+    router.push('/signIn')
+  },[])
 
     const handleMessagingPress = () =>{
         router.push({
@@ -44,7 +58,7 @@ const index = () => {
 
     useEffect(() => {
 
-      if (userInfo === null) return;
+      if (userInfo === null || userInfo === undefined) return;
       // Define the reference to the collection
       const messagesRef = collection(db, `users/${userInfo.uid}/messages`);
       
@@ -58,11 +72,15 @@ const index = () => {
   
       // Clean up the listener on unmount
       return () => unsubscribe();
-    }, [userInfo]);
+    }, [userInfo, user]);
 
     const getIntitialUpdates = async () => {
 
+      
+
       const userInfo = await getData('@profile_info');
+      if (userInfo === null || userInfo === undefined) return;
+
       setUserInfo(userInfo);
 
       const updatedRef = collection(db, `users/${userInfo.uid}/updates`);
@@ -108,7 +126,7 @@ const index = () => {
 
     useEffect(() => {
       getIntitialUpdates();
-    },[]);
+    },[user]);
 
     
     const footerComponent = useCallback(() => {
@@ -123,7 +141,7 @@ const index = () => {
 
     }
 
-    const [selectedcollectionInfo,setSelectedcollectionInfo] = useState({})
+    
 
     const onItemPress = useCallback(async(selection, item) => {
 
@@ -180,6 +198,36 @@ const index = () => {
       );
 
 
+      if (user?.isAnonymous) {
+        return (
+          <SafeAreaView style={{ flex: 1, justifyContent: 'center' }}>
+             <View style={[styles.container1, {backgroundColor:isDark ? "#121212" : "#F9F9F9"}]}>
+          <View style={styles.content}>
+            <Text style={[styles.title, {color:isDark ? 'white' : 'black'}]}>Join Us Today</Text>
+            <Text style={styles.subtitle}>
+              Create an account to unlock all features and get started
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={signUp}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryButtonText}>Create Account</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.secondaryButton}
+             onPress={signIn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryButtonText}>Already have an account?</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+          </SafeAreaView>
+        );
+      }
       
 
 
@@ -248,6 +296,71 @@ const index = () => {
 export default index
 
 const styles = StyleSheet.create({
+  container1: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    
+   
+  },
+  content: {
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    color: 'gray',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  primaryButton: {
+    backgroundColor: Colors.red_orange,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    marginBottom: 12,
+    shadowColor: '#6366f1',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  secondaryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  secondaryButtonText: {
+    color: Colors.red_orange,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   container: {
     height:'100%',
     marginTop:20,

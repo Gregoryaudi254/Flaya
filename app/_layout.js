@@ -178,8 +178,8 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false, animation:'slide_from_right' }} />
           <Stack.Screen name="(profile)" options={{ headerShown: false }} />
-          <Stack.Screen name="sharepost" options={{ headerShown: true ,title:"New post", animation:'slide_from_left'}} />
-          <Stack.Screen name="sharestory" options={{ headerShown: true,title:"New story" ,animation:'slide_from_left'}} />
+          <Stack.Screen name="sharepost" options={{ headerShown: true ,title:"New post", animation:'slide_from_left', headerShadowVisible:false}} />
+          <Stack.Screen name="sharestory" options={{ headerShown: true,title:"New story" ,animation:'slide_from_left', headerShadowVisible:false}} />
           <Stack.Screen name="story" options={{ headerShown: false , animation:'slide_from_right'}} />
 
           <Stack.Screen name="postpage" options={{ headerShown: false , animation:'slide_from_right'}} />
@@ -197,6 +197,10 @@ export default function RootLayout() {
           <Stack.Screen name="subscriptionPage" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
 
           <Stack.Screen name="textToImage" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
+          <Stack.Screen name="signUp" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
+          <Stack.Screen name="signIn" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
+          <Stack.Screen name="usernameinput" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
+          <Stack.Screen name="forgotpassword" options={{ headerShown: false,title:'', animation:'slide_from_right' }} />
         </Stack>
           
         </GestureHandlerRootView>

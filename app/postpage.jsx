@@ -41,6 +41,7 @@ import InteractingUsers from '@/components/Likers';
 
 import { useToast } from 'react-native-toast-notifications';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useAuth } from '@/constants/AuthContext';
 
 const reports = ['Nudity or sexual activity','Scam or Fraud','Violence or self injury','False information', 'Child abuse'];
 
@@ -128,18 +129,35 @@ const CaptionEditBottomSheet = React.memo(({
 const postpage = () => {
 
   const colorScheme = useColorScheme()
-
   const toast = useToast();
   
+  const {user} = useAuth()
+
+  const isUserAuthenticated = useCallback(async () => {
+    const userinfo = await getData('@profile_info');
+    console.log("Checking authenication")
+    if (user.isAnonymous) {
+      router.push('/signUp')
+      return false;
+    }
+
+    if (!userinfo) {
+      router.push('/usernameinput')
+      return false;
+    }
+
+
+    return true;
+  },[user])
 
 
   const dispatch = useDispatch()
     
-    const { data } = useLocalSearchParams();
+  const { data } = useLocalSearchParams();
 
   
-    const [post, setPost] = useState(JSON.parse(data))
-    const iscurrentuserpost = post.origin === 'currentuserprofile';
+  const [post, setPost] = useState(JSON.parse(data))
+  const iscurrentuserpost = post.origin === 'currentuserprofile';
 
 
   
@@ -207,6 +225,9 @@ const postpage = () => {
     })
   
     const handleOnLiked = useCallback(async() => {
+
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
   
   
       let likedposts = await getData('@liked_posts')
@@ -241,7 +262,9 @@ const postpage = () => {
       
   
   
-    const handleCommentPress = useCallback(() => {
+    const handleCommentPress = useCallback(async() => {
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
       setIsFullWidthModalVisible(true);
     }, []);
   
@@ -274,9 +297,7 @@ const postpage = () => {
         if (videoRef.current) {
           setVideoPlaying(false)
         }
-  
       }
-     
     }, []);
 
 
@@ -290,8 +311,7 @@ const postpage = () => {
     };
 
 
-    const userlocation = post.userinfo.coordinates;
-
+  
     const { coordinates } = useSelector(state => state.location);
 
     const [distanceString , setDistanceString] = useState(null);
@@ -318,20 +338,26 @@ const postpage = () => {
     
 
     useEffect(() => {
-        try{
-          if (coordinates.coords) {
-            console.log("redux")
-            setLocation({latitude:coordinates.coords.latitude, longitude:coordinates.coords.longitude})
-          }else if (userlocation){ 
-            console.log("notredux")
-            setLocation(userlocation)
+        const setlocation = async () =>
+        {
+          const userLocation = await getData('@stored_coordinates')
+          
+          try{
+            if (coordinates.coords) {
+              console.log("redux")
+              setLocation({latitude:coordinates.coords.latitude, longitude:coordinates.coords.longitude})
+            }else if (userLocation){ 
+              console.log("notredux")
+              setLocation(userLocation)
+            }
+      
+          }catch(e){
+            console.log("crashed ",e)
           }
     
-        }catch(e){
-          console.log("crashed ",e)
         }
-    
-        
+        setlocation();
+
       }, [coordinates])
   
    
@@ -340,6 +366,8 @@ const postpage = () => {
     const [isShared,setShared] = useState(false);
   
     const onRepostSelect = useCallback(async()=>{
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
   
       let sharedposts = await getData('@shared_posts')
   
@@ -390,7 +418,9 @@ const postpage = () => {
 
     const [dialog,setDialog] = useState(false)
 
-    const handleBlockUser = useCallback(() => {
+    const handleBlockUser = useCallback(async () => {
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
       setDialog(true)
     });
 
@@ -402,7 +432,9 @@ const postpage = () => {
     }
 
 
-    const handleCommentModalClose = () => {
+    const handleCommentModalClose = async() => {
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
       setIsFullWidthModalVisible(false)
     }
 
@@ -418,7 +450,9 @@ const postpage = () => {
       }
     }, [isBottomSheetOpen]);
 
-    const onReportDialogOpen = useCallback((postinfo) => {
+    const onReportDialogOpen = useCallback(async(postinfo) => {
+      const authentication = await isUserAuthenticated();
+      if (!authentication) return;
       setIsBottomSheetOpen(true)
     }, []);
 
@@ -567,11 +601,10 @@ const postpage = () => {
 
 
       useEffect(() => {
-
         const setViewed = async () => {
           const userInfo = await getData('@profile_info');
-          const ref = doc(db, `users/${post.user}/posts/${post.id}/views/${userInfo.uid}`);
-          await setDoc(ref, userInfo, {merge:true})
+          const ref = doc(db, `users/${post.user}/posts/${post.id}/views/${user.uid}`);
+          await setDoc(ref, userInfo || {uid:user.uid, anonymous:true}, {merge:true})
         }
         setViewed();
       },[]);
@@ -582,12 +615,15 @@ const postpage = () => {
       });
       
 
-      
+    
       const [dialogDownLoad, setDialogDownLoad] = useState(false);
       const [downloadProgress, setDownloadProgress] = useState(0);
       const [sharingUrls, setsharingUrls] = useState([]);
       
-      const postSharePress = useCallback(()=> {
+      const postSharePress = useCallback(async()=> {
+
+        const authentication = await isUserAuthenticated();
+        if (!authentication) return;
 
         console.log("sharing")
 
@@ -623,7 +659,9 @@ const postpage = () => {
 
 
       const [isLikersModalVisible, setLikersModalVisible] = useState(false);
-      const handleLikesPress = useCallback(() => {
+      const handleLikesPress = useCallback(async() => {
+        const authentication = await isUserAuthenticated();
+        if (!authentication) return;
         setLikersModalVisible(true);
       });
 
@@ -693,8 +731,8 @@ const postpage = () => {
           setCaptionLoading(false);
         }
       }, [newDescription, post]);
-      
-     
+
+          
     return (
 
       <GestureHandlerRootView>
@@ -764,24 +802,24 @@ const postpage = () => {
 
                           <View style={{borderRadius:5, marginLeft:10, marginTop:5, backgroundColor:Colors.blue,alignItems:'center',flexDirection:'row', paddingHorizontal:10, marginRight:10}}>
                             <Image style={{height:25,width:25, tintColor:'white'}} source={require('@/assets/icons/right-arrow.png')}/>
-
+                      
                             <View style={{height:30,width:1,backgroundColor:'white',marginLeft:10,marginRight:10}}/>
 
                             <Image style={{height:25,width:25}} source={require('@/assets/icons/map.png')}/>
-
+                     
                           </View>
 
 
                           </TouchableOpacity>}
 
-                        </View>
+                    </View>
 
-                        
 
-                      </View>
 
-                      
+                </View>
 
+               
+              
                      
 
                     </View>
@@ -804,7 +842,7 @@ const postpage = () => {
                     </View>
 
 
-                    </TouchableOpacity>}
+                  </TouchableOpacity>}
 
                   </View>}
 
@@ -821,8 +859,8 @@ const postpage = () => {
                   <Menu style={{right:10, marginLeft:10}} renderer={Popover}>
                     <MenuTrigger>
                       <View style={styles.menuIconContainer}>
-                      <Image
-                        resizeMode="contain"
+                        <Image
+                          resizeMode="contain"
                         source={require('@/assets/icons/menu.png')}
                         style={[styles.menuIcon, {tintColor:'gray'}]}
                       />
@@ -858,7 +896,7 @@ const postpage = () => {
                           <View style={styles.menuItemContainer}>
                             <Ionicons name="trash-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
                             <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Delete post</Text>
-                          </View>
+                      </View>
                         </MenuOption>
                       )}
 
@@ -867,7 +905,7 @@ const postpage = () => {
                           <View style={styles.menuItemContainer}>
                             <Ionicons name="create-outline" size={20} color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} />
                             <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>Edit caption</Text>
-                          </View>
+                      </View>
                         </MenuOption>
                       )}
 
@@ -876,7 +914,7 @@ const postpage = () => {
                           <View style={styles.menuItemContainer}>
                             <Ionicons name="share-social-outline" size={20} color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} />
                             <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>Share post</Text>
-                          </View>
+                      </View>
                         </MenuOption>
                       )}
                       
@@ -888,7 +926,7 @@ const postpage = () => {
                           </View>
                         </MenuOption>
                       )}
-                    </MenuOptions>
+                  </MenuOptions>
                   </Menu>
 
 
@@ -1011,9 +1049,9 @@ const postpage = () => {
                 styles.bottomIconsView, 
                 isLiked && {backgroundColor: 'rgba(222, 61, 80, 0.1)', borderColor: 'rgba(222, 61, 80, 0.3)'}
               ]}>
-                <Image
-                  resizeMode="contain"
-                  source={!isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
+                    <Image
+                      resizeMode="contain"
+                      source={!isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
                   style={[styles.actionIcon, !isLiked && {tintColor: 'gray'}]}
                 />
                 <Text style={[
@@ -1022,7 +1060,7 @@ const postpage = () => {
                 ]}>
                   {getFormatedString(likes)}
                 </Text>
-              </View>
+                </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionButton}>
@@ -1032,16 +1070,16 @@ const postpage = () => {
               ]}>
                 <Menu renderer={Popover}>
                   <MenuTrigger>
-                    <Image
-                      resizeMode="contain"
-                      source={require('@/assets/images/refresh.png')}
+                        <Image
+                              resizeMode="contain"
+                              source={require('@/assets/images/refresh.png')}
                       style={[
                         styles.actionIcon, 
                         !isShared && {tintColor: 'gray'}, 
                         isShared && {tintColor: 'tomato'}
                       ]}
-                    />
-                  </MenuTrigger>
+                            />
+                        </MenuTrigger>
                   <MenuOptions customStyles={{
                     optionsContainer: {
                       borderRadius: 12,
@@ -1051,50 +1089,50 @@ const postpage = () => {
                       borderColor: colorScheme === 'dark' ? '#444444' : '#DDDDDD',
                     }
                   }}>
-                    <MenuOption onSelect={onRepostSelect}>
+                          <MenuOption onSelect={onRepostSelect}>
                       <View style={styles.menuOptionItem}>
-                        <Image
-                          resizeMode="contain"
-                          source={require('@/assets/images/refresh.png')}
+                              <Image
+                                resizeMode="contain"
+                                source={require('@/assets/images/refresh.png')}
                           style={{height: 20, width: 20, marginRight: 8}}
-                        />
+                              />
                         <Text style={styles.menuOptionText}>Repost</Text>
-                      </View>
-                    </MenuOption>
-                    <MenuOption>
+                            </View>
+                          </MenuOption>
+                          <MenuOption>
                       <View style={styles.cancelOption}>
                         <Text style={{color: '#FF3B30'}}>Cancel</Text>
-                      </View>
-                    </MenuOption>
-                  </MenuOptions>
-                </Menu>
+                            </View>
+                          </MenuOption>
+                        </MenuOptions>
+                    </Menu>
                 <Text style={[
                   styles.bottomIconsText,
                   isShared && {color: 'tomato', fontWeight: '500'}
                 ]}>
                   {getFormatedString(shares)}
                 </Text>
-              </View>
+                </View>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={handleCommentPress} style={styles.actionButton}>
-              <View style={styles.bottomIconsView}>
-                <Image
-                  resizeMode="contain"
-                  source={require('@/assets/images/chat.png')}
+                <View style={styles.bottomIconsView}>
+                    <Image
+                      resizeMode="contain"
+                      source={require('@/assets/images/chat.png')}
                   style={[styles.actionIcon, {tintColor: 'gray'}]}
-                />
-                <Text style={styles.bottomIconsText}>{post.comments || 0}</Text>
-              </View>
+                    />
+                  <Text style={styles.bottomIconsText}>{post.comments || 0}</Text>
+                </View>
             </TouchableOpacity>
 
             {distanceString && (
               <View style={styles.distanceContainer}>
-                <Image
-                  resizeMode="contain"
-                  source={require('@/assets/icons/location_small.png')}
+                  <Image
+                    resizeMode="contain"
+                    source={require('@/assets/icons/location_small.png')}
                   style={[styles.locationIcon, {tintColor: 'gray'}]}
-                />
+                  />
                 <Text style={styles.distanceText}>{distanceString}</Text>
               </View>
             )}

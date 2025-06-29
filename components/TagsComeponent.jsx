@@ -43,6 +43,7 @@ const TagsComponent = () => {
       console.log("getting posts")
 
       const userInfo = await getData('@profile_info');
+      if (userInfo === null || userInfo === undefined) return;
       setUserInfo(userInfo)  
       const postsRef = collection(db, `users/${userInfo.uid}/tags`);
       const q = query(postsRef, orderBy('createdAt', 'desc'), limit(20));

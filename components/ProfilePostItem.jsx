@@ -5,16 +5,14 @@ import {useRouter} from 'expo-router'
 import { getData } from '@/constants/localstorage';
 
 
-const ProfilePostItem = React.memo(({post,userinfo}) => {
+const ProfilePostItem = React.memo(({post,userinfo,currentuserid}) => {
 
   const router = useRouter();
 
 
   const handlePress = async () => {
-
-    const profileInfo = await getData('@profile_info');
     
-    const origin = post.user === profileInfo.uid ? 'currentuserprofile' : 'notcurrentuserprofile';
+    const origin = post.user === currentuserid ? 'currentuserprofile' : 'notcurrentuserprofile';
 
     const updatedPost = {...post,userinfo:userinfo,origin:origin}
     router.push({

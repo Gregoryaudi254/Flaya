@@ -36,87 +36,87 @@ const TagsComponent = () => {
   }, [value])
 
   const [loadingmore, setLoadingMore] = useState(false);
-  const [isrefreshing, setrefreshing] = useState(true);
-  const [userinfo, setUserInfo] = useState(null);
+    const [isrefreshing, setrefreshing] = useState(true);
+    const [userinfo, setUserInfo] = useState(null);
   const [lastVisiblePost, setLastVisible] = useState(null);
 
-  const getPosts = useCallback(async () => {
-    console.log("getting posts")
+    const getPosts = useCallback(async () => {
+      console.log("getting posts")
+      
+      const postsRef = collection(db, `users/${uid}/tags`);
+      const q = query(postsRef, orderBy('createdAt', 'desc'), limit(20));
+      const querySnapshot = await getDocs(q);
 
-    const postsRef = collection(db, `users/${uid}/tags`);
-    const q = query(postsRef, orderBy('createdAt', 'desc'), limit(20));
-    const querySnapshot = await getDocs(q);
-
-    // Map over messages and convert `stamp` to a date string
-    const posts = querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data
-      };
-    });
+      // Map over messages and convert `stamp` to a date string
+      const posts = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            ...data
+        };
+      });
 
     console.log(posts.length + " length of posts")
 
-    setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]); // Save the last document
+      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]); // Save the last document
 
-    setPosts(posts);
+      setPosts(posts);
 
-    setrefreshing(false);
-  })
+      setrefreshing(false);
+    })
 
-  useEffect(() => {
-    getPosts();
+    useEffect(() => {
+        getPosts();
   }, []);
 
-  const getMorePosts = useCallback(async () => {
-    console.log("started loading")
-    if (loadingmore || !lastVisiblePost || posts.length < 2) return;
-    console.log("loading more")
-    setLoadingMore(true);
+    const getMorePosts = useCallback(async () => {
+      console.log("started loading")
+      if (loadingmore || !lastVisiblePost || posts.length < 2) return;
+      console.log("loading more")
+      setLoadingMore(true);
+   
+      const chatRef = collection(db, `users/${uid}/tags`);
+      const q = query(chatRef, orderBy('createdAt', 'desc'), startAfter(lastVisiblePost), limit(20));
 
-    const chatRef = collection(db, `users/${uid}/tags`);
-    const q = query(chatRef, orderBy('createdAt', 'desc'), startAfter(lastVisiblePost), limit(20));
-
-    const moreSnapshot = await getDocs(q);
-    const morePosts = moreSnapshot.docs.map(doc => ({
-      ...doc.data(),
-    }));
-
-    // Update last visible document and prepend new chats to list
-    setLastVisible(moreSnapshot.docs[moreSnapshot.docs.length - 1]);
-    setPosts((prevPosts) => [...prevPosts, ...morePosts]);
-    setLoadingMore(false);
+      const moreSnapshot = await getDocs(q);
+      const morePosts = moreSnapshot.docs.map(doc => ({
+          ...doc.data(),
+      }));
+      
+      // Update last visible document and prepend new chats to list
+      setLastVisible(moreSnapshot.docs[moreSnapshot.docs.length - 1]);
+      setPosts((prevPosts) => [...prevPosts, ...morePosts]);
+      setLoadingMore(false);
   }, [loadingmore, lastVisiblePost, posts]);
 
-  const footerComponent = useCallback(() => {
-    return loadingmore ? (
+    const footerComponent = useCallback(() => {
+      return loadingmore ? (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="large" color={Colors.blue} />
         <Text style={[styles.loadingText, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
           Loading more tags...
         </Text>
-      </View>
-    ) : null;
+        </View>
+      ) : null;
   }, [loadingmore, isDark]);
 
   const handlePostPress = (id) => {
-    router.push({
-      pathname: '/sharepost'
-    });
-  }
+      router.push({
+        pathname: '/sharepost'
+      });
+    }
 
-  const getUserInfo = async () => {
+      const getUserInfo = async () => {
     const ref = doc(db, `users/${uid}`);
-    const userInfoSnap = await getDoc(ref);
-    setUserInfo(userInfoSnap.data())
-  }
+        const userInfoSnap = await getDoc(ref);
+        setUserInfo(userInfoSnap.data())
+      }
 
-  useEffect(() => {
-    getUserInfo()
+      useEffect(() => {
+        getUserInfo()
   }, [])
 
-  const listHeaderComponent = useMemo(
-    () => (
+      const listHeaderComponent = useMemo(
+        () => (
       <View>
         {/* Modern Header */}
         <View style={[styles.header, { 
@@ -134,7 +134,7 @@ const TagsComponent = () => {
               size={24} 
               color={isDark ? Colors.light_main : Colors.dark_main} 
             />
-          </TouchableOpacity>
+                  </TouchableOpacity>
 
           <Text style={[styles.headerTitle, { color: isDark ? Colors.light_main : Colors.dark_main }]}>
             Tags
@@ -161,7 +161,7 @@ const TagsComponent = () => {
                     }]} 
                   />
                 </View>
-
+                
                 <View style={styles.profileInfo}>
                   <Text style={[styles.profileName, { 
                     color: isDark ? Colors.light_main : Colors.dark_main 
@@ -183,7 +183,7 @@ const TagsComponent = () => {
                         <Text style={styles.statValue}>
                           {userinfo.tagscount || 0}
                         </Text>
-                      </View>
+                        </View>
                     </View>
                   </View>
                 </View>
@@ -209,15 +209,15 @@ const TagsComponent = () => {
             </Text>
           )}
         </View>
-      </View>
+            </View>
     ), [userinfo, isDark, posts.length]
-  )
+      )
 
-  const onRefresh = useCallback(() => {
-    setrefreshing(true);
-    getPosts();
-    getUserInfo();
-  });
+    const onRefresh = useCallback(() => {
+        setrefreshing(true);
+        getPosts();
+        getUserInfo();
+      });
 
   const EmptyState = () => (
     <View style={styles.emptyStateContainer}>
@@ -246,25 +246,25 @@ const TagsComponent = () => {
       <View style={styles.container}>
         {!isrefreshing ? (
           <FlatList
-            bounces={true}
-            keyExtractor={(post) => post.id}
-            numColumns={2}
+      bounces={true}
+      keyExtractor={(post) => post.id}
+      numColumns={2}
             style={[styles.flatList, { 
               backgroundColor: isDark ? Colors.dark_background : Colors.light_background 
             }]}
             refreshControl={
               <RefreshControl
-                refreshing={isrefreshing}
-                onRefresh={onRefresh}
+        refreshing={isrefreshing}
+        onRefresh={onRefresh}
                 tintColor={Colors.blue}
                 colors={[Colors.blue]}
               />
             }
-            ListHeaderComponent={listHeaderComponent}
-            ListFooterComponent={footerComponent}
+      ListHeaderComponent={listHeaderComponent}
+      ListFooterComponent={footerComponent}
             ListEmptyComponent={!isrefreshing && posts.length === 0 ? EmptyState : null}
-            onEndReachedThreshold={0.5}
-            onEndReached={getMorePosts}
+      onEndReachedThreshold={0.5}
+      onEndReached={getMorePosts}
             renderItem={({ item }) => (
               <ProfilePostItem post={item} userinfo={userinfo} />
             )}
@@ -286,7 +286,7 @@ const TagsComponent = () => {
           </View>
         )}
       </View>
-    </SafeAreaView>
+     </SafeAreaView>
   )
 }
 

@@ -22,6 +22,7 @@ import { getData } from '@/constants/localstorage';
 import { useToast } from 'react-native-toast-notifications';
 import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useAuth } from '@/constants/AuthContext';
 
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = (width - 30) / 2; // 2 columns with padding
@@ -70,6 +71,8 @@ const EventsScreen = () => {
 
   const [shouldLoadMore, setShouldLoadMore] = useState(true);
 
+  const {user} = useAuth();
+
   const fetchEvents = useCallback(async (isRefreshing = false, events = [], isLoadingMore = false) => {
     try {
       if (!isLoadingMore) {
@@ -82,9 +85,8 @@ const EventsScreen = () => {
         setLoadingMore(true)
       }  
       
-      const userInfo = await getData('@profile_info');
-      
-      if (!userInfo || !userInfo.uid) {
+   
+      if (!user.uid) {
         showToast("User information not found");
         setLoading(false);
         setRefreshing(false);
@@ -95,7 +97,7 @@ const EventsScreen = () => {
       // Call the Firebase function with simplified parameters
       const getEvents = httpsCallable(functions, 'getEventsNearby');
       const response = await getEvents({ 
-        userId: userInfo.uid,
+        userId: user.uid,
         category: selectedCategory !== 'All' ? selectedCategory : null,
         events:events,
         limit: 5

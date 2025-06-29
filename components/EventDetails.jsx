@@ -45,7 +45,9 @@ const EventDetails = ({ event , setInvitationStatus, invitationStatus, checkInSh
       const userinfo = await getData("@profile_info");
   
       if (!userinfo) {
-        console.error("User info not found.");
+        console.log("User info not found.");
+        setLoading(false)
+        setInvitationStatus("Get Invitation")
         return;
       }
 
@@ -275,7 +277,7 @@ const EventDetails = ({ event , setInvitationStatus, invitationStatus, checkInSh
         <View style={styles.section}>
           <View style={styles.attendeesHeader}>
             <Text style={[styles.sectionLabel, {color: isDark ? Colors.light_main : Colors.dark_main}]}>
-              People Going ({event.attendees?.length || 24} People)
+              People Going ({event.attendeesnumber || event.attendees?.length || 24} People)
             </Text>
             {event.attendees?.length > 118 && (
               <TouchableOpacity style={styles.viewAllButton}>

@@ -22,8 +22,8 @@ const privacy = () => {
   const dispatch = useDispatch();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
-  const options = [
+
+    const options = [
     { 
       label: 'everyone', 
       value: 1,
@@ -49,20 +49,20 @@ const privacy = () => {
   const [savingId, setSavingId] = useState(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
+      useEffect(() => {
     const getStatus = async () => {
-      let settings = await getData('@settings');
-      settings = settings || {};
-      
-      const item = options.find((item) => item.label === (settings.profileview || 'everyone'));
-      if (item) {
-        setSelectedOption(item.value);
-      }
-      
-      setLoading(false);
-    }
+          let settings = await getData('@settings');
+          settings = settings || {};
 
-    getStatus();
+          const item = options.find((item) => item.label === (settings.profileview || 'everyone'));
+      if (item) {
+          setSelectedOption(item.value);
+      }
+
+          setLoading(false);
+        }
+
+        getStatus();
   }, []);
 
   const animateSelection = () => {
@@ -87,28 +87,28 @@ const privacy = () => {
     setSavingId(item.value);
     setLoading(true);
 
-    const userInfo = await getData('@profile_info')
+        const userInfo = await getData('@profile_info')
     const ref = doc(db, `users/${userInfo.uid}`);
 
-    try {
-      await updateDoc(ref, {
-        [`settings.profileview`]: item.label.toLowerCase()
-      });
+        try {
+          await updateDoc(ref, {
+            [`settings.profileview`]: item.label.toLowerCase()
+          });
 
-      let settings = await getData('@settings');
+          let settings = await getData('@settings');
       settings = settings || {};
-      settings.profileview = item.label;
+          settings.profileview = item.label;
       await storeData('@settings', settings);
 
-      setSelectedOption(item.value);
+          setSelectedOption(item.value);
       dispatch(setValues(item.label));
-    } catch (error) {
-      console.log("Update failed: ", error);
-    }
+        } catch (error) {
+          console.log("Update failed: ", error);
+        }
 
     setSavingId(null);
     setLoading(false);
-  }
+      }
 
   return (
     <View style={[styles.container, {backgroundColor: isDark ? Colors.dark_main : Colors.light_main}]}>
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerDescription: {
-    fontSize: 15,
+        fontSize: 15,
     textAlign: 'center',
     paddingHorizontal: 20,
     lineHeight: 22,
@@ -269,8 +269,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 122, 255, 0.3)',
   },
   optionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
     flex: 1,
   },
   iconWrapper: {

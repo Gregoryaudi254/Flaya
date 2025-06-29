@@ -22,6 +22,7 @@ import { getData } from '@/constants/localstorage';
 import { useToast } from 'react-native-toast-notifications';
 import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useAuth } from '@/constants/AuthContext';
 
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = (width - 30) / 2; // 2 columns with padding
@@ -32,6 +33,8 @@ const BusinessesScreen = () => {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const toast = useToast();
+
+  const {user} = useAuth()
 
   const [businesses, setBusinesses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,9 +87,9 @@ const BusinessesScreen = () => {
         setLoadingMore(true);
       }  
       
-      const userInfo = await getData('@profile_info');
+     
       
-      if (!userInfo || !userInfo.uid) {
+      if (!user.uid) {
         showToast("User information not found");
         setLoading(false);
         setRefreshing(false);
@@ -96,7 +99,7 @@ const BusinessesScreen = () => {
       // Call the Firebase function with simplified parameters
       const getBusinesses = httpsCallable(functions, 'getBusinessesNearby');
       const response = await getBusinesses({ 
-        userId: userInfo.uid,
+        userId: user.uid,
         category: selectedCategory !== 'All' ? selectedCategory : null,
         businesses: businesses,
         limit: 5
