@@ -164,7 +164,15 @@ const index = () => {
 
         setLoadingPost(false);
 
-        console.log("info "+ JSON.stringify(item))
+        if (!document.exists()) {
+          setLoadingPost(false);
+          return;
+        }
+        
+
+        console.log("info "+ JSON.stringify(document.data()))
+
+      
 
         const origin = item.postcreatorid === userinfo.uid ? 'currentuserprofile' : 'notcurrentuserprofile'
 

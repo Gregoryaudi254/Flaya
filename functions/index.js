@@ -2189,7 +2189,7 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
 
       const query = businessesGeoCollection.near({
         center: new admin.firestore.GeoPoint(userLat, userLng),
-        radius: 3500, // Radius in kilometers (slightly larger than events)
+        radius: 500, // Radius in kilometers (slightly larger than events)
       });
 
       // Fetch the nearest businesses, limit to 10
@@ -2214,13 +2214,11 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
         // Sort by distance
         businesses.sort((a, b) => a.distanceValue - b.distanceValue);
 
-        const businessesObject = {contentType: "business", businesses, id: "bus123"};
+        const businessesObject = {contentType: "business", businesses, id: getRandomString(10)};
 
         // Determine insertion position
         if (validPosts.length > 3) {
           validPosts.splice(1, 0, businessesObject); // Insert after the 1st item
-        } else {
-          validPosts.push(businessesObject); // Add at the end
         }
 
         if (validPosts.length >= 10) {
@@ -2272,15 +2270,12 @@ exports.getPosts = functions.https.onCall(async (data, context) => {
       if (events.length > 0) {
         events.sort((a, b) => a.distanceValue - b.distanceValue);
 
-        const eventsObject = {contentType: "event", events, id:"id123"};
+        const eventsObject = {contentType: "event", events, id:getRandomString(10)};
 
         // Determine insertion position
         if (validPosts.length > 5) {
           validPosts.splice(4, 0, eventsObject); // Insert after the 5th item
-        } else {
-          validPosts.push(eventsObject); // Add at the end
-        }
-
+        } 
         if (validPosts.length >= 15) {
           validPosts.splice(15, 0, {...eventsObject, id: getRandomString(10)}); // Insert after the 10th item
         } 
@@ -2444,7 +2439,7 @@ async function getAndFilterPosts(userid, period, limit, userCoordinates) {
                 };
             })
             .sort((a, b) => a.distance - b.distance)
-            .slice(0, 6);
+            .slice(0, 20);
 
   console.log("areas "+JSON.stringify(sortedResults.map((area) => {
     return {latitude:area.coordinates._latitude, longitude:area.coordinates._longitude};

@@ -269,7 +269,7 @@ const SharePostScreen = () => {
     function showToast(message) {
         toast.show(message, {
           type: "normal",
-          placement: "top",
+          placement: "bottom",
           duration: 2000,
           offset: 30,
           animationType: "zoom-in",
@@ -423,6 +423,7 @@ const SharePostScreen = () => {
                }
 
               await setDoc(doc(db, `users/${credentials.user.uid}/posts`, id), data);
+              showToast("Post uploaded successfully");
               console.log('Files uploaded successfully:', urls);
           } catch (error) {
               console.error('Error uploading item:', error);

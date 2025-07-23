@@ -275,7 +275,7 @@ const ShareStoryScreen = () => {
     function showToast(message) {
         toast.show(message, {
           type: "normal",
-          placement: "top",
+          placement: "bottom",
           duration: 2000,
           offset: 30,
           animationType: "zoom-in",
@@ -433,6 +433,7 @@ const ShareStoryScreen = () => {
 
               // Save to Firestore
               await setDoc(doc(db, `users/${credentials.user.uid}/stories`, id), data);
+              showToast("Story uploaded successfully");
               console.log('Story uploaded successfully');
           } catch (error) {
               console.error('Error uploading story:', error);

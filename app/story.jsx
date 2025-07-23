@@ -136,15 +136,18 @@ const story = () => {
     const userinfo = await getData('@profile_info');
     if (!isCurrentUser && userinfo) {
 
-      const currentLocation = await getLocation();
+      // use stored location
+      const currentLocation = await getData('@stored_coordinates');
 
-      if(currentLocation === null) return
+      if(currentLocation === null || currentLocation === undefined) return
+
+      console.log("adding view "+ JSON.stringify(currentLocation))
 
       const itemR = {
         id:userinfo.uid,
         username:userinfo.username,
         image:userinfo.profilephoto,
-        coordinates:new GeoPoint(currentLocation.coords.latitude,currentLocation.coords.longitude),
+        coordinates:new GeoPoint(currentLocation.latitude,currentLocation.longitude),
         createdAt:serverTimestamp()
       }
       const ref = doc(db, `users/${item.creatorid}/stories/${activeThread.threadId}/views/${userinfo.uid}`);
@@ -327,7 +330,7 @@ const story = () => {
   function showToast(message){
     toast.show(message, {
       type: "normal",
-      placement: "top",
+      placement: "bottom",
       duration: 2000,
       offset: 30,
       animationType: "zoom-in",

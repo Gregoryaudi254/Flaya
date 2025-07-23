@@ -10,11 +10,29 @@ const interactingusersItem = React.memo(({userinfo:{coordinates,username,created
 
   const colorScheme = useColorScheme();
 
+  let distance = null;
 
-  const distance = getDistance(
-      { latitude: coordinates.latitude || coordinates._latitude, longitude: coordinates.longitude || coordinates._longitude },
-      { latitude: postcoordinate._latitude || postcoordinate.latitude, longitude: postcoordinate._longitude || postcoordinate.longitude }
-  );
+  if (
+    coordinates &&
+    postcoordinate &&
+    (coordinates.latitude || coordinates._latitude) &&
+    (coordinates.longitude || coordinates._longitude) &&
+    (postcoordinate.latitude || postcoordinate._latitude) &&
+    (postcoordinate.longitude || postcoordinate._longitude)
+  ) {
+    distance = getDistance(
+      {
+        latitude: coordinates.latitude ?? coordinates._latitude,
+        longitude: coordinates.longitude ?? coordinates._longitude,
+      },
+      {
+        latitude: postcoordinate.latitude ?? postcoordinate._latitude,
+        longitude: postcoordinate.longitude ?? postcoordinate._longitude,
+      }
+    );
+  } 
+
+
 
 
 return (
@@ -43,7 +61,7 @@ return (
 
           </View>
 
-          <View style={{flexDirection:'row',marginTop:5,alignItems:'center'}}>
+         {distance && <View style={{flexDirection:'row',marginTop:5,alignItems:'center'}}>
 
               <Image
               resizeMode="cover"
@@ -53,7 +71,7 @@ return (
 
               <Text style={{fontSize:13,color:'gray'}}>{` ${distance} m`}</Text>
 
-          </View>
+          </View>}
 
 
 

@@ -284,7 +284,7 @@ const home = () => {
     const response = await callbackFunction(info);
 
     const data = response.data;
-    console.log('Hureeeee'); // Log the result
+    // Response received successfully
 
     return data;
    }); 
@@ -783,7 +783,7 @@ const home = () => {
 
           setViewedPosts((prev) => [...prev, activePost]);
         }
-      },[activePost]);
+      },[activePost, posts]);
 
       
       useEffect(() => {

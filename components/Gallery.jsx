@@ -142,7 +142,7 @@ const Gallery = () => {
       onEndReachedThreshold={0.5}
       onEndReached={getMorePosts}
       renderItem={({item}) =>(
-        <ProfilePostItem post={item} userinfo={userinfo}/>
+        <ProfilePostItem post={item} userinfo={userinfo} currentuserid={userinfo.uid} />
           
       )}
       data={posts}/> :
