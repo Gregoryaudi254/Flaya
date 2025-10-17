@@ -1,41 +1,79 @@
 {
   "project_info": {
-    "project_number": "584306140716",
-    "project_id": "flaya-9ebb2",
-    "storage_bucket": "flaya-9ebb2.appspot.com"
+    "project_number": "724255769414",
+    "firebase_url": "https://flaya-40942-default-rtdb.firebaseio.com",
+    "project_id": "flaya-40942",
+    "storage_bucket": "flaya-40942.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:584306140716:android:933263024fa3076c121389",
+        "mobilesdk_app_id": "1:724255769414:android:d0471aa449706539245b47",
         "android_client_info": {
-          "package_name": "com.flayasapp.flayaco"
+          "package_name": "com.company.stryt"
         }
       },
       "oauth_client": [
         {
-          "client_id": "584306140716-58589sosjfhtgdppcmud5vshspiqis59.apps.googleusercontent.com",
+          "client_id": "724255769414-gp00pm4vcc58opm8dptgr8t3odfi5gvh.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.flayasapp.flayaco",
-            "certificate_hash": "6ddafbf96d64fa951f05381264d09baae89edfe4"
+            "package_name": "com.company.stryt",
+            "certificate_hash": "f5a2b176b8de6b99e9ef6dc62c36539b0362c2ea"
           }
         },
         {
-          "client_id": "584306140716-cqj55jkteggfijs93jdrh1p36l3g2kkm.apps.googleusercontent.com",
+          "client_id": "724255769414-kld4c00dpkt417r4ujujeuku9gs0b0dl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.company.stryt",
+            "certificate_hash": "7f8ac22bf8892653743e4fce528bc95906c81157"
+          }
+        },
+        {
+          "client_id": "724255769414-pbq26jaadrvp5jcks4lfihrkfe8k9rm6.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyCGH0TZTw-U6JmCSrYCEfWflcZlIWyBdSI"
+          "current_key": "AIzaSyDReLXW-WnLovw2UyqqB69efB7apgWkKrQ"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "584306140716-cqj55jkteggfijs93jdrh1p36l3g2kkm.apps.googleusercontent.com",
+              "client_id": "724255769414-pbq26jaadrvp5jcks4lfihrkfe8k9rm6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:724255769414:android:7354cc5009148b92245b47",
+        "android_client_info": {
+          "package_name": "com.flayasapp.flayaco"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "724255769414-pbq26jaadrvp5jcks4lfihrkfe8k9rm6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDReLXW-WnLovw2UyqqB69efB7apgWkKrQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "724255769414-pbq26jaadrvp5jcks4lfihrkfe8k9rm6.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

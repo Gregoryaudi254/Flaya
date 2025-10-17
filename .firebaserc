@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "flaya-9ebb2"
-  }
+    "default": "flaya-9ebb2",
+    "stryt": "flaya-40942"
+  },
+  "targets": {},
+  "etags": {}
 }

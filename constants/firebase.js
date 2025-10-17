@@ -14,20 +14,18 @@ import { getDatabase } from 'firebase/database';
 
 
 
-
-
-
 // Your Firebase configuration object (replace with your actual config from Firebase)
 const firebaseConfig = {
-  apiKey: "AIzaSyARe5D_HvyEVE19hKBlj4H5Ww9q7ZnIpjg",
-  authDomain: "flaya-9ebb2.firebaseapp.com",
-  projectId: "flaya-9ebb2",
-  storageBucket: "flaya-9ebb2.appspot.com",
-  messagingSenderId: "584306140716",
-  appId: "1:584306140716:web:04a01d128e466c87121389",
-  measurementId: "G-XD5RDXV0N0",
- 
+  apiKey: "AIzaSyDCLaGP03dfV-oKaF1_vzMbqYkFRR888c8",
+  authDomain: "flaya-40942.firebaseapp.com",
+  projectId: "flaya-40942",
+  storageBucket: "flaya-40942.firebasestorage.app",
+  messagingSenderId: "724255769414",
+  appId: "1:724255769414:web:9e880bcd0c13993b245b47",
+  measurementId: "G-KWZV8RKPQC"
 };
+
+
 
 const app = initializeApp(firebaseConfig);
 const storage = getStorage(app); 

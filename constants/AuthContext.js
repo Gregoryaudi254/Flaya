@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     GoogleSignin.configure({
       webClientId:
-        "584306140716-cqj55jkteggfijs93jdrh1p36l3g2kkm.apps.googleusercontent.com",
+        "724255769414-pbq26jaadrvp5jcks4lfihrkfe8k9rm6.apps.googleusercontent.com",
     });
   }, []);
 
@@ -52,7 +52,6 @@ export const AuthProvider = ({ children }) => {
     try {
       await reauthenticateWithCredential(user, credential);
       console.log("Re-authentication successful.");
-
       return {status:'passed'}
     } catch (error) {
       console.log("Error during re-authentication:", error.message);
@@ -186,11 +185,6 @@ export const AuthProvider = ({ children }) => {
     });
 
   }
-
-
-  
-
-  
 
   useEffect(() => {
 
