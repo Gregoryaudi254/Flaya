@@ -40,8 +40,11 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     GoogleSignin.configure({
-      webClientId:
-        "724255769414-pbq26jaadrvp5jcks4lfihrkfe8k9rm6.apps.googleusercontent.com",
+      webClientId: "724255769414-pbq26jaadrvp5jcks4lfihrkfe8k9rm6.apps.googleusercontent.com",
+      scopes: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
+      offlineAccess: true,
+      hostedDomain: '',
+      forceCodeForRefreshToken: true,
     });
   }, []);
 
@@ -117,23 +120,31 @@ export const AuthProvider = ({ children }) => {
     try {
       await GoogleSignin.hasPlayServices();
       const userDetails = await GoogleSignin.signIn();
+      console.log('Google Sign-In successful, user details:', userDetails);
+      
+      if (!userDetails.data?.idToken) {
+        console.error('No ID token received from Google Sign-In');
+        return false;
+      }
   
       const credential = GoogleAuthProvider.credential(userDetails.data.idToken);
       let user;
   
       try {
         // Try to upgrade anonymous user
+        console.log('Attempting to link with existing anonymous user...');
         await linkWithCredential(auth.currentUser, credential);
         user = auth.currentUser;
+        console.log('Successfully linked with anonymous user');
       } catch (error) {
         console.log('Linking error:', error);
   
         if (error.code === 'auth/credential-already-in-use') {
-         
-  
+          console.log('Credential already in use, signing in with Google account...');
           // Sign in with Google account instead
           const result = await signInWithCredential(auth, credential);
           user = result.user;
+          console.log('Successfully signed in with Google account');
         } else {
           throw error;
         }
@@ -166,6 +177,11 @@ export const AuthProvider = ({ children }) => {
   
     } catch (err) {
       console.error('Google Sign-In failed:', err);
+      console.error('Error details:', {
+        code: err.code,
+        message: err.message,
+        details: err.details
+      });
       return false;
     }
   };

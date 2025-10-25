@@ -18,14 +18,10 @@
       "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
-      "targetSdkVersion": 35,
-      "notification": {
-        "icon": "./assets/images/flareapp.png",
-        "color": "#FFFFFF"
-      },
+      
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyCxuU-tNQrj6WbpsHRooQN0vDEyOr1nb8E"
+          "apiKey": "AIzaSyAT_E6dpyMuvzTO676hUwCPEDjS4lGs7B0"
         }
       },
       "adaptiveIcon": {
@@ -43,7 +39,8 @@
     "plugins": [
       "expo-router",
       "@react-native-google-signin/google-signin",
-      "react-native-compressor"
+      "react-native-compressor",  
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

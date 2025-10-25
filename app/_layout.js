@@ -29,7 +29,7 @@ import { ToastProvider } from 'react-native-toast-notifications'
 import messaging from '@react-native-firebase/messaging';
 
 import { Notifications } from 'react-native-notifications';
-import PushNotification from "react-native-push-notification";
+
 import { PermissionsAndroid } from 'react-native';
 
 
@@ -84,16 +84,7 @@ export default function RootLayout() {
   }
 
   const createChannel = () => {
-    PushNotification.createChannel(
-      {
-        channelId: "default-channel-id", // Unique ID for your channel
-        channelName: "Default Channel", // Visible name for users
-        channelDescription: "A default channel for notifications", // Optional description
-        importance: 4, // Importance level for notifications
-        vibrate: true, // Enable vibration
-      },
-      (created) => console.log(`Channel created: ${created}`) // Callback indicating if the channel was created or already exists
-    );
+  
   }
   
   
@@ -141,7 +132,7 @@ export default function RootLayout() {
         notificationPayload.bigPictureUrl = postphoto;
       }
 
-      PushNotification.localNotification(notificationPayload);
+     // PushNotification.localNotification(notificationPayload);
     });
 
     const unsubscribe = messaging().onMessage(async (remoteMessage) => {
