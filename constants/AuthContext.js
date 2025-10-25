@@ -300,6 +300,8 @@ export const AuthProvider = ({ children }) => {
     await deleteData('@profile_info');
     await deleteData('@settings');
     await deleteData('@stored_coordinates')
+    await deleteData('@liked_comments')
+
     await signOut(auth);
 
     const userRef = doc(db, `users/${user.uid}`);

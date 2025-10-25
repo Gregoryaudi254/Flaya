@@ -911,12 +911,11 @@ const home = () => {
 
       const getStories = useCallback(async (callbackfunction) => {
 
-       
-          
+      
               try {
                 console.log("getting initial stories");
                 
-                const response = await fetch(`https://us-central1-flaya-9ebb2.cloudfunctions.net/${callbackfunction}`, {
+                const response = await fetch(`https://us-central1-flaya-40942.cloudfunctions.net/${callbackfunction}`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -966,47 +965,48 @@ const home = () => {
         <View style={{ flexDirection: 'column', marginBottom: 10 }}>
   
           <View style={styles.header}>
-            <Text style={{ color: 'orange', fontSize: 30, fontWeight: 'bold' }}>Flaya</Text>
-  
-            <View style={{flexDirection:'row',marginEnd:15}} >
-  
-            {(storiesavailable !== null && storiesavailable) ?<TouchableOpacity onPress={handleaddnewstory}>
-              <LinearGradient
-                colors={['#FF7F50', '#FF6347', '#FF4500']} // Define your gradient colors here
-                style={styles.gradient}
-                start={{ x: 0, y: 0 }} // Gradient start point (top-left)
-                end={{ x: 1, y: 1 }} // Gradient end point (bottom-right)
-              >
-  
-                <Image
-                resizeMode="cover"
-                source={{uri:userinfo !== null ? userinfo.profilephoto : defaultProfileImage}}
-                style={{
-                  width: 36,
-                  height: 36,
-                  alignSelf:'center',
-                  borderWidth:3,
-                  overflow:'hidden',
-                  borderColor:colorScheme === 'dark' ? Colors.dark_main: Colors.light_main,
-                  borderRadius: 18,
-                 
-                } }
-                />
-  
-              </LinearGradient>
-  
-              
-            </TouchableOpacity> : storiesavailable !== null && <TouchableOpacity onPress={handleaddnewstory}>
-               <Image style={{ width: 40, height: 40 ,tintColor:colorScheme === 'dark' ? 'white' : "black"}} source={require('@/assets/icons/stories.png')} />
-            </TouchableOpacity> } 
-           
-            <TouchableOpacity onPress={handlePostPress} >
-              <Image style={{ width: 40, height: 40 ,tintColor:colorScheme === 'dark' ? 'white' : "black",marginLeft:10}} source={require('@/assets/icons/addpost.png')} />
-            </TouchableOpacity>
-  
+            <View style={styles.logoContainer}>
+              <Text style={[styles.logoText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>
+                Flaya
+              </Text>
             </View>
   
-            
+            <View style={styles.actionButtonsContainer}>
+              {(storiesavailable !== null && storiesavailable) ? (
+                <TouchableOpacity onPress={handleaddnewstory} style={styles.storyButton}>
+                  <LinearGradient
+                    colors={['#FF7F50', '#FF6347', '#FF4500']}
+                    style={styles.storyGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Image
+                      resizeMode="cover"
+                      source={{uri: userinfo !== null ? userinfo.profilephoto : defaultProfileImage}}
+                      style={styles.storyProfileImage}
+                    />
+                  </LinearGradient>
+                </TouchableOpacity>
+              ) : storiesavailable !== null && (
+                <TouchableOpacity onPress={handleaddnewstory} style={styles.storyButton}>
+                  <View style={[styles.storyButtonContainer, {backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'}]}>
+                    <Image 
+                      style={[styles.storyIcon, {tintColor: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]} 
+                      source={require('@/assets/icons/stories.png')} 
+                    />
+                  </View>
+                </TouchableOpacity>
+              )}
+              
+              <TouchableOpacity onPress={handlePostPress} style={styles.postButton}>
+                <View style={[styles.postButtonContainer, {backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'}]}>
+                  <Image 
+                    style={[styles.postIcon, {tintColor: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]} 
+                    source={require('@/assets/icons/addpost.png')} 
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
           {(stories.length > 0 && (islocationaccepted || isFetchingPostsWithNewLocationLoading)) && <Stories isStoriesVisible={storiesVisible} stories={stories}  /> }
   
@@ -1267,13 +1267,85 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   header: {
-    padding: 4,
-    margin: 3,
-    marginBottom:20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 12,
+    marginBottom: 20,
     flexDirection: 'row',
-    
-    justifyContent:"space-between",
+    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  logoContainer: {
+    flex: 1,
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    fontFamily: 'Lato',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  storyButton: {
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  storyGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 2,
+  },
+  storyProfileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  storyButtonContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  storyIcon: {
+    width: 24,
+    height: 24,
+  },
+  postButton: {
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  postButtonContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  postIcon: {
+    width: 24,
+    height: 24,
   },
   modal: {
     justifyContent: 'flex-start',
@@ -1299,15 +1371,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-  },gradient: {
-        width: 40,
-        height: 40,
-        
-        flexDirection:'column',
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-      },
+  },
   uploadProgressContainer: {
     marginTop: 20,
     marginBottom: 20,

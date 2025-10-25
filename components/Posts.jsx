@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Image, ImageBackground, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, Image, ImageBackground, Dimensions, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ResizeMode, Video } from 'expo-av';
 import Events from './Events';
@@ -72,6 +72,9 @@ const Posts = React.memo(({ isAuthenticated, setLikesMap, likesMap, setSharesMap
     userLiked: false,
     likes: post.likes
   });
+
+  // Animation for like button
+  const likeAnimation = useRef(new Animated.Value(1)).current;
 
   // Batch state updates for better performance
   const updateState = useCallback((updates) => {
@@ -175,12 +178,25 @@ const Posts = React.memo(({ isAuthenticated, setLikesMap, likesMap, setSharesMap
     await setDoc(ref, userinfo, {merge: true});
   }, [post.user, post.id]);
 
-  // Optimized like handling with batched updates
+  // Optimized like handling with batched updates and animation
   const handleOnLiked = useCallback(async () => {
     try {
       const authentication = await isAuthenticated();
       if (!authentication) return;
 
+      // Animate like button
+      Animated.sequence([
+        Animated.timing(likeAnimation, {
+          toValue: 1.2,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(likeAnimation, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
       const likedPosts = await getData('@liked_posts') || [];
       
@@ -203,7 +219,7 @@ const Posts = React.memo(({ isAuthenticated, setLikesMap, likesMap, setSharesMap
     } catch (error) {
       console.error("Error handling like:", error);
     }
-  }, [post.id, post.likes, updateInteranctions]);
+  }, [post.id, post.likes, updateInteranctions, likeAnimation]);
 
   // Memoized icon press handler
   const handleIconPress = useCallback((onPress) => {
@@ -413,359 +429,389 @@ const Posts = React.memo(({ isAuthenticated, setLikesMap, likesMap, setSharesMap
   
   return (
     <View style={styles.mainView}>
+      <View style={styles.postCard}>
+        {
+         ( post.contentType !== 'event' && post.contentType !== 'business') && <View style={styles.headerView}>
+          <View style={styles.profileView}>
+            <TouchableOpacity onPress={handleProfilePress}>
+              <Image
+                source={{ uri: post.profileImage }}
+                style={styles.profileImage}
+              />
+            </TouchableOpacity>
 
-      {
-       ( post.contentType !== 'event' && post.contentType !== 'business') && <View style={styles.headerView}>
-        <View style={styles.profileView}>
-          <TouchableOpacity onPress={handleProfilePress}>
-            <Image
-              source={{ uri: post.profileImage }}
-              style={styles.profileImage}
-            />
-          </TouchableOpacity>
+            <View style={styles.textView}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{flex:1, flexDirection:'row', alignItems:'center', flexWrap: 'wrap'}}>
+                  <TouchableOpacity onPress={handlePostPress}>
+                    <Text style={[styles.username, {color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>
+                      {post.business ? post.business.name : post.username}
+                    </Text>
+                  </TouchableOpacity>
 
-          <View style={styles.textView}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View style={{flex:1, flexDirection:'row',alignItems:'center'}}>
-                <TouchableOpacity onPress={handlePostPress}>
-                <Text style={[styles.username, {color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>{post.business ? post.business.name : post.username}</Text>
-                </TouchableOpacity>
+                  {post.verified && <Image
+                    resizeMode="contain"
+                    source={require('@/assets/icons/verified.png')}
+                    style={[styles.verifiedBadge, {tintColor: Colors.blue}]}
+                  />}
 
-                {post.verified && <Image
-                  resizeMode="contain"
-                  source={require('@/assets/icons/verified.png')}
-                  style={{
-                    width: 20,
-                    height: 20,    
-                    paddingRight: 25,
-                  }}
-                />}
-
-
-
-                <TouchableOpacity onPress={handlePressShare}>
-                  <Image
-                        resizeMode="contain"
-                        source={require('@/assets/icons/sharing_post.png')}
-                        style={[styles.menuIcon, {tintColor:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main, marginStart:10}]}
-                      />
-                </TouchableOpacity>
-
-                 <Text style={{fontSize:15, color:'gray', marginStart:3}}>{getFormatedString(post.sharings || 0)}</Text>  
-              </View>
-
-              {post.isshowinglocation && <Image style={{height:25,width:25}} source={require('@/assets/icons/pinview.png')}/>}
-              
-              <Menu renderer={Popover} >
-                <MenuTrigger >
-                <Image
+                  <TouchableOpacity onPress={handlePressShare} style={styles.shareButton}>
+                    <Image
                       resizeMode="contain"
-                      source={require('@/assets/icons/menu.png')}
+                      source={require('@/assets/icons/sharing_post.png')}
                       style={[styles.menuIcon, {tintColor:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}
                     />
-                </MenuTrigger>
-                <MenuOptions customStyles={{
-                  optionsContainer: {
-                    borderRadius: 12,
-                    padding: 8,
-                    width: 200,
-                    backgroundColor: colorScheme === 'dark' ? '#2A2A2A' : '#FFFFFF',
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 5,
-                    elevation: 6
-                  }
-                }}>
-                 <MenuOption onSelect={() => 
-                  handleBlockUser({postcreatorid:post.user, postcreatorimage:post.profileImage,postcreatorusername:post.username})}>
-                   <View style={styles.menuItemContainer}>
-                     <Ionicons name="person-remove-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
-                     <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Block user</Text>
-                   </View>
-                 </MenuOption>
+                  </TouchableOpacity>
+
+                  <Text style={[styles.shareCount, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>
+                    {getFormatedString(post.sharings || 0)}
+                  </Text>  
+                </View>
+
+                <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                  {post.isshowinglocation && <Image style={{height:20,width:20, opacity: 0.7}} source={require('@/assets/icons/pinview.png')}/>}
                   
-                  <MenuOption onSelect={() => handleRemovePost(post.id)}>
-                    <View style={styles.menuItemContainer}>
-                      <Ionicons name="eye-off-outline" size={20} color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} />
-                      <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>Remove post</Text>
-                    </View>
-                  </MenuOption>
+                  <Menu renderer={Popover} >
+                    <MenuTrigger >
+                      <Image
+                        resizeMode="contain"
+                        source={require('@/assets/icons/menu.png')}
+                        style={[styles.menuIcon, {tintColor:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}
+                      />
+                    </MenuTrigger>
+                    <MenuOptions customStyles={{
+                      optionsContainer: {
+                        borderRadius: 16,
+                        padding: 8,
+                        width: 200,
+                        backgroundColor: colorScheme === 'dark' ? '#2A2A2A' : '#FFFFFF',
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 8 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 12,
+                        elevation: 8
+                      }
+                    }}>
+                     <MenuOption onSelect={() => 
+                      handleBlockUser({postcreatorid:post.user, postcreatorimage:post.profileImage,postcreatorusername:post.username})}>
+                       <View style={styles.menuItemContainer}>
+                         <Ionicons name="person-remove-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
+                         <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Block user</Text>
+                       </View>
+                     </MenuOption>
+                      
+                      <MenuOption onSelect={() => handleRemovePost(post.id)}>
+                        <View style={styles.menuItemContainer}>
+                          <Ionicons name="eye-off-outline" size={20} color={colorScheme === 'dark' ? Colors.light_main : Colors.dark_main} />
+                          <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>Remove post</Text>
+                        </View>
+                      </MenuOption>
 
-                  <MenuOption onSelect={handleReport}>
-                    <View style={styles.menuItemContainer}>
-                      <Ionicons name="flag-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
-                      <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Report post</Text>
-                    </View>
-                  </MenuOption>
-                </MenuOptions>
-              </Menu>
-            </View>
+                      <MenuOption onSelect={handleReport}>
+                        <View style={styles.menuItemContainer}>
+                          <Ionicons name="flag-outline" size={20} color={colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'} />
+                          <Text style={[styles.menuItemText, {color: colorScheme === 'dark' ? '#FF6B6B' : '#FF3B30'}]}>Report post</Text>
+                        </View>
+                      </MenuOption>
+                    </MenuOptions>
+                  </Menu>
+                </View>
+              </View>
 
-            <View style={{flexDirection:'row'}}>
+              <View style={styles.timestampContainer}>
+                <TouchableOpacity onPress={handlePostPress}>
+                  <Text style={[styles.timestamp, {color: colorScheme === 'dark' ? '#999' : '#666'}]}>
+                    {timeAgoPost(post.createdAt)}
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity onPress={handlePostPress}>
-                <Text style={{fontSize:15, color:'gray', marginStart:5}}>{timeAgoPost(post.createdAt)}</Text>
-              </TouchableOpacity>
-
-             { post.business && <View
-                  style={[
-                    styles.categoryButton,
-                    { marginStart:10,
-                      marginTop:5,
-                      backgroundColor: 
-                        colorScheme === 'dark' ? '#333333' : '#F0F0F0',
-                      borderWidth:  1,
-                      borderColor: 'rgba(150,150,150,0.3)'
-                    }
-                  ]}
-                 
-                >
-                  <Ionicons 
-                    name={getCategoryIcon(post.business.category)} 
-                    size={16} 
-                    color={colorScheme === 'dark' ? '#DDDDDD' : '#666666'} 
-                  />
-                  <Text 
+               { post.business && <View
                     style={[
-                      styles.categoryText, 
+                      styles.categoryButton,
                       { 
-                        color: colorScheme === 'dark' ? '#DDDDDD' : '#666666',
-                        marginLeft: 5
+                        marginStart: 12,
+                        backgroundColor: 
+                          colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                        borderColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)'
                       }
                     ]}
                   >
-                    {post.business.category}
-                  </Text>
-                </View>}
-              
-            </View>
-
-
-
-          </View>
-        </View>
-      </View>
-      }
-
-      {post.description && <TouchableOpacity onPress={handlePostPress}>
-              <Text numberOfLines={3} style={[styles.description, {color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}]}>{post.description}</Text>
-            </TouchableOpacity> }
-      
-
-      <View style={{ height: (post.contentType !== 'event' && post.contentType !== 'business') ? mediaDimensions.height : 280, width: '100%', marginTop: 10 }}>
-        {post.contentType === 'image'  ? post.content.length < 2 ? (
-          <TouchableWithoutFeedback onPress={()=>onImagePress(post.content[0])}>
-            <ImageBackground
-              source={{ uri: post.content[0] }}
-              style={{ width: '100%', height: mediaDimensions.height, borderRadius: 10, overflow: 'hidden' }}
-
-            />
-          </TouchableWithoutFeedback>
-         
-        ):
-        ( <View style={{borderRadius:10, height: mediaDimensions.height}}>
-            <ImageSlider 
-            caroselImageContainerStyle={{ height: mediaDimensions.height, overflow:'hidden', width:screenWidth-100, borderRadius:10 }}
-            caroselImageStyle={{ resizeMode:'cover', height: mediaDimensions.height, overflow:'hidden', width:screenWidth, marginHorizontal:5, borderRadius:10 }}
-            data={post.content.map((image) => ({ img: image }))}
-            autoPlay={false}
-            closeIconColor="#fff"
-
-            />
-        </View>
-         
-        )
-         :  post.contentType === "video" ? ( 
-          <View style={{marginHorizontal:1}}>
-            <TouchableOpacity
-              onPress={handleOnPlay}
-              style={{
-                width: "100%", height: mediaDimensions.height
-              }}
-            >
-              <View>
-                <Video 
-                source={{ uri: post.content }}
-                shouldPlay={false}
-                ref={videoRef}
-                  style={{ width: "100%", height: mediaDimensions.height, borderRadius: 10 }}
-                resizeMode={ResizeMode.COVER}
-                useNativeControls={false}
-                usePoster={true}
-                posterStyle={{ borderRadius: 10, overflow: 'hidden', resizeMode: 'cover' }}
-                posterSource={{ uri: post.thumbnail }}
-                onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-
-                />
+                    <Ionicons 
+                      name={getCategoryIcon(post.business.category)} 
+                      size={14} 
+                      color={colorScheme === 'dark' ? '#DDDDDD' : '#666666'} 
+                    />
+                    <Text 
+                      style={[
+                        styles.categoryText, 
+                        { 
+                          color: colorScheme === 'dark' ? '#DDDDDD' : '#666666',
+                          marginLeft: 6
+                        }
+                      ]}
+                    >
+                      {post.business.category}
+                    </Text>
+                  </View>}
               </View>
+            </View>
+          </View>
+        </View>
+        }
 
-              <Image
-                style={{ width: 20, height: 20 ,position: 'absolute',
-                  alignSelf: 'center',
-                  top: '50%',
-                  opacity: !state.isVideoPlaying && !state.isBuffering ? 1 : 0,
-                  marginTop: -10}}
-                source={require('@/assets/icons/play.png')}
-              />
+        {post.description && (
+          <View style={styles.postContentContainer}>
+            <TouchableOpacity onPress={handlePostPress}>
+              <Text numberOfLines={3} style={[styles.description, {color:colorScheme === 'dark' ? Colors.light_main: Colors.dark_main}]}>
+                {post.description}
+              </Text>
             </TouchableOpacity>
-            {state.isBuffering && <ActivityIndicator style={{ alignSelf: 'center',
-             marginTop: -10, top: '50%',  position:"absolute" }} size='large' color="white"  />}
-          </View>
-        ) : post.contentType === "event" ? (
-          <View style={{borderRadius: 10, overflow: 'hidden'}}>
-            <Events 
-              events={post.events || []} 
-              onEventPress={onEventPress}
-            />
-          </View>
-        ) : post.contentType === "business" ? (
-          <View style={{borderRadius: 10, overflow: 'hidden'}}>
-            <Businesses 
-              businesses={post.businesses || []} 
-              onBusinessPress={(business) => {
-                router.push({
-                  pathname: '/oppuserprofile',
-                  params: { 
-                    uid: business.ownerid, 
-                  }
-                });
-              }}
-            />
-          </View>
-        ) : (
-          <View style={{padding: 10, alignItems: 'center', justifyContent: 'center', height: 100}}>
-            <Text style={{color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}>
-              Unsupported content type
-            </Text>
           </View>
         )}
-      </View>
 
+        <View style={styles.mediaContainer}>
+          <View style={{ height: (post.contentType !== 'event' && post.contentType !== 'business') ? mediaDimensions.height : 280, width: '100%' }}>
+            {post.contentType === 'image' ? post.content.length < 2 ? (
+              <TouchableWithoutFeedback onPress={()=>onImagePress(post.content[0])}>
+                <ImageBackground
+                  source={{ uri: post.content[0] }}
+                  style={{ width: '100%', height: mediaDimensions.height, borderRadius: 12, overflow: 'hidden' }}
+                />
+              </TouchableWithoutFeedback>
+            ) : (
+              <View style={{borderRadius: 12, height: mediaDimensions.height, overflow: 'hidden'}}>
+                <ImageSlider 
+                  caroselImageContainerStyle={{ height: mediaDimensions.height, overflow:'hidden', width: screenWidth - 32, borderRadius: 12 }}
+                  caroselImageStyle={{ resizeMode:'cover', height: mediaDimensions.height, overflow:'hidden', width: screenWidth, marginHorizontal: 8, borderRadius: 12 }}
+                  data={post.content.map((image) => ({ img: image }))}
+                  autoPlay={false}
+                  closeIconColor="#fff"
+                />
+              </View>
+            ) : post.contentType === "video" ? ( 
+              <View style={{marginHorizontal: 0}}>
+                <TouchableOpacity
+                  onPress={handleOnPlay}
+                  style={{
+                    width: "100%", 
+                    height: mediaDimensions.height,
+                    borderRadius: 12,
+                    overflow: 'hidden'
+                  }}
+                >
+                  <Video 
+                    source={{ uri: post.content }}
+                    shouldPlay={false}
+                    ref={videoRef}
+                    style={{ width: "100%", height: mediaDimensions.height, borderRadius: 12 }}
+                    resizeMode={ResizeMode.COVER}
+                    useNativeControls={false}
+                    usePoster={true}
+                    posterStyle={{ borderRadius: 12, overflow: 'hidden', resizeMode: 'cover' }}
+                    posterSource={{ uri: post.thumbnail }}
+                    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+                  />
 
-
-     { (post.peopleliked && post.peopleliked?.length > 2) &&
-
-       <TouchableOpacity onPress={()=>handlePressLikers(handleLikersPress)}>
-
-        <View style={styles.peopleLikedContainer}>
-        {post.peopleliked?.slice(0, 4).map((liker, index) => (
-          <Image 
-            key={liker.id || index}
-                source={{ uri: liker.profileImage }}
-                style={[styles.peopleLikedImage, { marginLeft: index > 0 ? -15 : 0 }]} 
-              />
-            ))}
-
-            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}> Liked by </Text>
-
-            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,fontWeight:'bold' }}>{post.peopleliked[0].name || "Linda"}</Text>
-
-            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}}> and </Text>
-
-            <Text style={{color:colorScheme === 'dark' ? Colors.light_main : Colors.dark_main,fontWeight:'bold' }}>{"Others"}</Text>
+                  {!state.isVideoPlaying && !state.isBuffering && (
+                    <View style={styles.videoPlayButton}>
+                      <Image
+                        style={styles.videoPlayIcon}
+                        source={require('@/assets/icons/play.png')}
+                      />
+                    </View>
+                  )}
+                </TouchableOpacity>
+                {state.isBuffering && (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size='large' color="white" />
+                  </View>
+                )}
+              </View>
+            ) : post.contentType === "event" ? (
+              <View style={{borderRadius: 12, overflow: 'hidden'}}>
+                <Events 
+                  events={post.events || []} 
+                  onEventPress={onEventPress}
+                />
+              </View>
+            ) : post.contentType === "business" ? (
+              <View style={{borderRadius: 12, overflow: 'hidden'}}>
+                <Businesses 
+                  businesses={post.businesses || []} 
+                  onBusinessPress={(business) => {
+                    router.push({
+                      pathname: '/oppuserprofile',
+                      params: { 
+                        uid: business.ownerid, 
+                      }
+                    });
+                  }}
+                />
+              </View>
+            ) : (
+              <View style={{padding: 20, alignItems: 'center', justifyContent: 'center', height: 100, borderRadius: 12, backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'}}>
+                <Text style={{color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main, fontSize: 14}}>
+                  Unsupported content type
+                </Text>
+              </View>
+            )}
           </View>
-
-       </TouchableOpacity>
-       
-     }
-
-
-      {
-        (post.contentType !== 'event' && post.contentType !== 'business') && <View style={styles.bottomIcons}>
-
-          <View style={{flexDirection:'row'}}>
-
-            <View style={[styles.bottomIconsView, {marginStart:3}, state.isLiked && {backgroundColor:'rgba(222, 61, 80, 0.1)',borderWidth:0}]}>
-          <TouchableOpacity onPress={handleOnLiked}>
-            <Image
-              resizeMode="contain"
-                  source={!state.isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
-                  style={[styles.menuIcon, !state.isLiked && {tintColor:'gray', marginRight:3}, {width:25,height:25, marginRight:5}]}
-            />
-          </TouchableOpacity>
-              <Text style={styles.bottomIconsText}>{getFormatedString(state.likes)}</Text>
         </View>
 
 
-            <View style={[styles.bottomIconsView, state.isShared && {backgroundColor:'rgba(234, 93, 22, 0.2)',borderWidth:0}]}>
-            <Menu renderer={Popover}>
-                  <MenuTrigger>
-                <Image
-                      resizeMode="contain"
-                      source={require('@/assets/images/refresh.png')}
-                      style={[
-                        styles.actionIcon, 
-                        !state.isShared && {tintColor: 'gray'}, 
-                        state.isShared && {tintColor: 'tomato'}
-                      ]}
-                    />
-                </MenuTrigger>
-                  <MenuOptions customStyles={{
-                    optionsContainer: {
-                      borderRadius: 12,
-                      padding: 4,
-                      backgroundColor: colorScheme === 'dark' ? '#2A2A2A' : '#FFFFFF',
-                      borderWidth: colorScheme === 'dark' ? 1 : 0.5,
-                      borderColor: colorScheme === 'dark' ? '#444444' : '#DDDDDD',
-                    }
-                  }}>
-                  <MenuOption onSelect={onRepostSelect}>
-                      <View style={styles.menuOptionItem}>
+
+        { (post.peopleliked && post.peopleliked?.length > 2) && (
+          <TouchableOpacity onPress={()=>handlePressLikers(handleLikersPress)}>
+            <View style={styles.peopleLikedContainer}>
+              {post.peopleliked?.slice(0, 4).map((liker, index) => (
+                <Image 
+                  key={liker.id || index}
+                  source={{ uri: liker.profileImage }}
+                  style={[styles.peopleLikedImage, { marginLeft: index > 0 ? -12 : 0 }]} 
+                />
+              ))}
+
+              <Text style={[styles.bottomIconsText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main, marginLeft: 8}]}>
+                Liked by 
+              </Text>
+
+              <Text style={[styles.bottomIconsText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main, fontWeight: '600', marginLeft: 4}]}>
+                {post.peopleliked[0].name || "Linda"}
+              </Text>
+
+              <Text style={[styles.bottomIconsText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main, marginLeft: 4}]}>
+                and 
+              </Text>
+
+              <Text style={[styles.bottomIconsText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main, fontWeight: '600', marginLeft: 4}]}>
+                Others
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+
+        {
+          (post.contentType !== 'event' && post.contentType !== 'business') && (
+            <View style={styles.bottomIcons}>
+              <View style={styles.interactionContainer}>
+                <View style={[
+                  styles.bottomIconsView, 
+                  state.isLiked && {
+                    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+                    borderColor: 'rgba(255, 59, 48, 0.3)',
+                    borderWidth: 1
+                  }
+                ]}>
+                  <TouchableOpacity onPress={handleOnLiked}>
+                    <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
+                      <Image
+                        resizeMode="contain"
+                        source={!state.isLiked ? require('@/assets/images/heart.png') : require('@/assets/icons/heartliked.png')}
+                        style={[
+                          styles.actionIcon, 
+                          !state.isLiked && {tintColor: '#666'}, 
+                          state.isLiked && {tintColor: '#FF3B30'}
+                        ]}
+                      />
+                    </Animated.View>
+                  </TouchableOpacity>
+                  <Text style={[
+                    styles.bottomIconsText,
+                    state.isLiked && {color: '#FF3B30', fontWeight: '600'}
+                  ]}>
+                    {getFormatedString(state.likes)}
+                  </Text>
+                </View>
+
+                <View style={[
+                  styles.bottomIconsView, 
+                  state.isShared && {
+                    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+                    borderColor: 'rgba(255, 149, 0, 0.3)',
+                    borderWidth: 1
+                  }
+                ]}>
+                  <Menu renderer={Popover}>
+                    <MenuTrigger>
                       <Image
                         resizeMode="contain"
                         source={require('@/assets/images/refresh.png')}
-                          style={{height: 20, width: 20, marginRight: 8}}
+                        style={[
+                          styles.actionIcon, 
+                          !state.isShared && {tintColor: '#666'}, 
+                          state.isShared && {tintColor: '#FF9500'}
+                        ]}
                       />
-                        <Text style={styles.menuOptionText}>Repost</Text>
-                    </View>
-                  </MenuOption>
-                  <MenuOption>
-                      <View style={styles.cancelOption}>
-                        <Text style={{color: '#FF3B30'}}>Cancel</Text>
-                    </View>
-                  </MenuOption>
-                </MenuOptions>
-            </Menu>
-                <Text style={[
-                  styles.bottomIconsText,
-                  isShared && {color: 'tomato', fontWeight: '500'}
-                ]}>
-                  {getFormatedString(state.shares)}
-                </Text>
-        </View>
-            
+                    </MenuTrigger>
+                    <MenuOptions customStyles={{
+                      optionsContainer: {
+                        borderRadius: 16,
+                        padding: 8,
+                        backgroundColor: colorScheme === 'dark' ? '#2A2A2A' : '#FFFFFF',
+                        borderWidth: colorScheme === 'dark' ? 1 : 0.5,
+                        borderColor: colorScheme === 'dark' ? '#444444' : '#DDDDDD',
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 8,
+                        elevation: 4,
+                      }
+                    }}>
+                      <MenuOption onSelect={onRepostSelect}>
+                        <View style={styles.menuOptionItem}>
+                          <Image
+                            resizeMode="contain"
+                            source={require('@/assets/images/refresh.png')}
+                            style={{height: 18, width: 18, marginRight: 10, tintColor: '#FF9500'}}
+                          />
+                          <Text style={[styles.menuOptionText, {color: colorScheme === 'dark' ? Colors.light_main : Colors.dark_main}]}>
+                            Repost
+                          </Text>
+                        </View>
+                      </MenuOption>
+                      <MenuOption>
+                        <View style={styles.cancelOption}>
+                          <Text style={{color: '#FF3B30', fontWeight: '500'}}>Cancel</Text>
+                        </View>
+                      </MenuOption>
+                    </MenuOptions>
+                  </Menu>
+                  <Text style={[
+                    styles.bottomIconsText,
+                    state.isShared && {color: '#FF9500', fontWeight: '600'}
+                  ]}>
+                    {getFormatedString(state.shares)}
+                  </Text>
+                </View>
 
+                <View style={styles.bottomIconsView}>
+                  <TouchableOpacity onPress={() => handleIconPress(onCommentPress)}>
+                    <Image
+                      resizeMode="contain"
+                      source={require('@/assets/images/chat.png')}
+                      style={[styles.actionIcon, {tintColor: '#666'}]}
+                    />
+                  </TouchableOpacity>
+                  <Text style={styles.bottomIconsText}>{post.comments || 0}</Text>
+                </View>
+              </View>
 
-        <View style={styles.bottomIconsView}>
-          <TouchableOpacity onPress={() => handleIconPress(onCommentPress)}>
-            <Image
-              resizeMode="contain"
-              source={require('@/assets/images/chat.png')}
-              style={[styles.menuIcon, {tintColor:'gray',width:27,height:27, marginRight:3}]}
-            />
-          </TouchableOpacity>
-          <Text style={[styles.bottomIconsText]}>{post.comments || 0}</Text>
-        </View>
+              {distanceString && (
+                <View style={styles.locationContainer}>
+                  <Image
+                    resizeMode="contain"
+                    source={require('@/assets/icons/location_small.png')}
+                    style={[styles.actionIcon, {tintColor: '#666', width: 16, height: 16}]}
+                  />
+                  <Text style={[styles.bottomIconsText, {fontSize: 12}]}>{distanceString}</Text>
+                </View>
+              )}
+            </View>
+          )
+        }
 
-
-          </View>
-        
-
-       
-        {distanceString && <View style={{flexDirection: 'row',
-        alignItems: 'center',}}>
-          <Image
-            resizeMode="contain"
-            source={require('@/assets/icons/location_small.png')}
-            style={[styles.menuIcon, {tintColor:'gray',width:35,height:35, marginRight:3}]}
-          />
-          <Text style={styles.bottomIconsText}>{distanceString}</Text>
-        </View>}
       </View>
-      }
-
-      
     </View>
   );
 }) 
@@ -799,127 +845,281 @@ const triggerStyles = {
 const styles = StyleSheet.create({
   mainView: {
     flex: 1,
-    padding: 10,
+    marginHorizontal: 12,
+    marginVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  postCard: {
+    backgroundColor: 'transparent',
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   headerView: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 3,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'transparent',
   },
   profileView: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   profileImage: {
-    width: 50,
-    height: 50,
-    borderColor: 'white',
-    borderWidth: 3,
-    borderRadius: 25,
-    marginEnd: 10,
+    width: 48,
+    height: 48,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 2,
+    borderRadius: 24,
+    marginEnd: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   textView: {
     flexDirection: 'column',
     flex: 1,
   },
   username: {
-    fontSize: 17,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   description: {
-   
-    marginTop:10,
+    marginTop: 12,
     fontSize: 15,
+    lineHeight: 22,
+    letterSpacing: 0.1,
   },
   menuIcon: {
-    width: 30,
-    height: 30,
-    
+    width: 24,
+    height: 24,
+    opacity: 0.7,
   },
   thumbnail: {
     width: '100%',
     height: 250,
-    borderRadius: 10,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginTop: 10,
-    shadowColor: 'gray',
-    shadowRadius: 3,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   bottomIcons: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
+    alignItems: 'center',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   bottomIconsText: {
-    color: 'gray',
-    fontSize: 15,
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
   },
   bottomIconsView: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginStart:15,
-    borderRadius:20,
-    borderWidth:0.8,
-    borderColor:"gray",
-    padding:10
-   
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    minWidth: 60,
+    justifyContent: 'center',
   },
   categoryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    height: 40,
-    borderRadius: 20,
-    marginHorizontal: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    height: 32,
+    borderRadius: 16,
+    marginHorizontal: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   categoryText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
+    letterSpacing: 0.1,
   },
   peopleLikedContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop:8
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.02)',
+    borderRadius: 12,
+    marginHorizontal: 16,
   },
   peopleLikedImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   menuItemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 8,
   },
   menuItemText: {
-    fontSize: 16,
+    fontSize: 15,
     marginLeft: 12,
     fontWeight: '500',
+    letterSpacing: 0.1,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   actionIcon: {
-    width: 30,
-    height: 30,
-    paddingRight: 25,
+    width: 24,
+    height: 24,
+    opacity: 0.8,
   },
   menuOptionItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 8,
   },
   menuOptionText: {
-    color: 'black',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#333',
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: 0.1,
   },
   cancelOption: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 8,
+  },
+  // New styles for enhanced UI
+  postContentContainer: {
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  mediaContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  interactionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  verifiedBadge: {
+    width: 18,
+    height: 18,
+    marginLeft: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  shareButton: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  timestampContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  timestamp: {
+    fontSize: 13,
+    color: '#888',
+    marginLeft: 8,
+    fontWeight: '400',
+    letterSpacing: 0.1,
+  },
+  shareCount: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 4,
+    fontWeight: '500',
+    letterSpacing: 0.1,
+  },
+  videoPlayButton: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '50%',
+    marginTop: -30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  videoPlayIcon: {
+    width: 24,
+    height: 24,
+    tintColor: 'white',
+  },
+  loadingContainer: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '50%',
+    marginTop: -20,
+  },
+  // Enhanced interaction button styles
+  likeButton: {
+    transform: [{ scale: 1 }],
+  },
+  shareButtonContainer: {
+    transform: [{ scale: 1 }],
+  },
+  commentButton: {
+    transform: [{ scale: 1 }],
   },
 });
