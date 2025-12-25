@@ -1,50 +1,93 @@
-# Welcome to your Expo app 👋
+Flaya
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Cross-Platform Social & Utility App built with React Native & Expo
 
-## Get started
+Project Overview
 
-1. Install dependencies
+Flaya is a social networking and community engagement app designed to connect users within local areas. Users can share posts, stories, and updates visible to people nearby, enabling real-time interactions, community building, and access to local information. The app emphasizes scalability, reliability, and a modular code architecture for future feature growth.
 
-   ```bash
-   npm install
-   ```
+Key Features
 
-2. Start the app
+User Accounts & Authentication: Secure login and registration using Firebase Auth.
 
-   ```bash
-    npx expo start
-   ```
+Location-Based Interaction: Posts and stories visible to users within a configurable radius.
 
-In the output, you'll find options to open the app in a
+Real-Time Updates: Firestore integration enables live updates for posts, stories, and interactions.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Media Support: Upload and view images and videos seamlessly.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+State Management: Centralized state using Redux slices for scalable application logic.
 
-## Get a fresh project
+Cross-Platform Compatibility: Fully functional on Android, iOS, and web via Expo.
 
-When you're ready, run:
+Tech Stack
 
-```bash
-npm run reset-project
-```
+Frontend: React Native, React, Expo
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Backend / Database: Firebase Firestore, Firebase Cloud Functions
 
-## Learn more
+Language: JavaScript (primary), TypeScript (minor)
 
-To learn more about developing your project with Expo, look at the following resources:
+State Management: Redux / Redux Toolkit
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Navigation: React Navigation
 
-## Join the community
+Development Tools: Git/GitHub, ESLint, Prettier
 
-Join our community of developers creating universal apps.
+Project Structure
+/app
+ ├─ /components      # Reusable UI components
+ ├─ /constants       # App-wide constants
+ ├─ /functions       # Helper functions & business logic
+ ├─ /hooks           # Custom hooks
+ ├─ /screens         # App screens
+ ├─ /slices          # Redux slices
+ ├─ /store           # Redux store configuration
+ └─ App.js           # Entry point
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Setup & Installation
+
+Clone the repository:
+
+git clone https://github.com/Gregoryaudi254/Flaya.git
+
+
+Navigate to the project folder:
+
+cd Flaya
+
+
+Install dependencies:
+
+npm install
+
+
+Start the Expo development server:
+
+expo start
+
+
+Open the app on a simulator or your mobile device using the Expo Go app.
+
+Usage
+
+Users can register and log in.
+
+Create posts or stories visible to nearby users.
+
+Interact with posts (likes, comments).
+
+Upload media content (images/videos).
+
+Explore real-time community updates.
+
+Contributions
+
+This project was built and maintained solely by Gregory Otieno as a personal portfolio and real-world application project. Contributions from others are welcome through pull requests.
+
+Contact
+
+Gregory Otieno
+Email: otile992@gmail.com
+
+GitHub: github.com/Gregoryaudi254
